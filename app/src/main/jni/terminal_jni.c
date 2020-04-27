@@ -277,6 +277,17 @@ static int create_log(JNIEnv* env,
     dup2(pts, 1);
     dup2(pts, 2);
 
+    puts("Welcome to the Android Terminal Log\n");
+
+    puts("To view a demonstration long press on the screen");
+    puts("tap \"More...\"");
+    puts("tap \"printf something to the terminal");
+    puts("\nBy default this invokes the following C/C++ code:\n");
+    puts("    printf(\"HELLO FROM NATIVE CPP\\n\");\n");
+    puts("like a terminal, output is sent by printing a new line");
+    puts("so if no output appears, try putting a new line in your printing function");
+    puts("\nNow printing logging info:\n");
+
     printf("opening ptmx (master) device\n");
     printf("opened ptmx (master) device: %d\n", ptm);
     printf("opening %s (slave) device\n", devname);
