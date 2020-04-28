@@ -110,7 +110,7 @@ public final class TerminalActivity extends Activity {
         terminalController.onCreate(
             this,
             findViewById(R.id.terminal_view),
-            false
+            true
         );
     }
 

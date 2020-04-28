@@ -176,7 +176,7 @@ public class TerminalController {
 
         terminalControllerService = new TerminalControllerService();
         terminalControllerService.terminalController = this;
-        terminalControllerService.isLogView = true;
+        terminalControllerService.isLogView = isLogView;
 
         Intent serviceIntent = new Intent(terminalActivity, TerminalService.class);
         // Start the service and make it run regardless of who is bound to it:
