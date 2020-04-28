@@ -222,9 +222,10 @@ public class TerminalService extends Service implements SessionChangedCallback {
 
     /**
      * Creates terminal instance with running 'sh'.
+     * @param isLogView     if this is true then this is converted into a LogView instead of a Shell
      * @return              a created terminal session that can be attached to TerminalView.
      */
-    public TerminalSession createShellSession() {
+    public TerminalSession createShellSession(boolean isLogView) {
         ArrayList<String> environment = new ArrayList<>();
         Context appContext = getApplicationContext();
 
@@ -244,7 +245,7 @@ public class TerminalService extends Service implements SessionChangedCallback {
 
         Log.i(Config.APP_LOG_TAG, "initiating sh session with following arguments: " + processArgs.toString());
 
-        TerminalSession session = new TerminalSession(false, "/bin/sh", processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this);
+        TerminalSession session = new TerminalSession(isLogView, "/bin/sh", processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this);
         mTerminalSessions.add(session);
         updateNotification();
         return session;

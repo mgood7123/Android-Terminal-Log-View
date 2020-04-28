@@ -34,6 +34,7 @@ public class TerminalControllerService implements ServiceConnection {
      * Initialized in {@link #onServiceConnected(ComponentName, IBinder)}.
      */
     ArrayAdapter<TerminalSession> mListViewAdapter;
+    boolean isLogView = false; // start as shell
 
     @Override
     public void onServiceConnected(ComponentName componentName, IBinder service) {
@@ -144,7 +145,7 @@ public class TerminalControllerService implements ServiceConnection {
                 try {
                     TerminalSession session;
 
-                    session = terminalController.mTermService.createShellSession();
+                    session = terminalController.mTermService.createShellSession(isLogView);
                     session.mSessionName = "SHELL";
                     terminalController.mTerminalView.attachSession(session);
                     terminalController.switchToSession(terminalController.mTermService.getSessions().get(0));
