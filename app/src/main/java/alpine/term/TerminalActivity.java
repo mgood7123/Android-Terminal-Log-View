@@ -150,7 +150,7 @@ public final class TerminalActivity extends Activity implements ServiceConnectio
 
         // obtain view instance
         mTerminalView = findViewById(R.id.terminal_view);
-        mTerminalView.isLogView = true;
+        mTerminalView.isLogView = false;
         mTerminalView.setOnKeyListener(new InputDispatcher(this));
 
         // is this needed?
