@@ -204,6 +204,10 @@ public class TerminalService extends Service implements SessionChangedCallback {
         }
     }
 
+    public boolean removeSession(TerminalSession session) {
+        return mTerminalSessions.remove(session);
+    }
+
     public List<TerminalSession> getSessions() {
         return mTerminalSessions;
     }

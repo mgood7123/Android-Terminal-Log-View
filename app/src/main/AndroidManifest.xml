@@ -17,7 +17,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:banner="@drawable/banner"
         android:label="@string/application_name"
-        android:theme="@style/Theme.TermApp"
+        android:theme="@style/Theme.AppCompat.DayNight.DarkActionBar"
         android:supportsRtl="false"
         tools:ignore="GoogleAppIndexingWarning">
 

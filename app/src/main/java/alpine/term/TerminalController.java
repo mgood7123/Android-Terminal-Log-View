@@ -18,13 +18,18 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.AbsListView;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ListView;
+import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.viewpager.widget.PagerAdapter;
 import androidx.viewpager.widget.ViewPager;
 
@@ -69,17 +74,23 @@ public class TerminalController {
     final int MAX_FONTSIZE = 256;
     int MIN_FONTSIZE;
     int currentFontSize = -1;
+    DrawerLayout drawerLayout;
+    ViewPager viewPager;
+    ListView leftDrawerList;
+    RelativeLayout terminalContainer;
+    RelativeLayout mainView;
 
-    public void onCreate(
-        TerminalActivity terminalActivity,
-        TerminalView viewById,
-        boolean isLogView
-    ) {
+    public void onCreate(TerminalActivity terminalActivity, TerminalView viewById) {
         inflater = LayoutInflater.from(terminalActivity);
         activity = terminalActivity;
         assetManager = terminalActivity.getAssets();
         mTerminalView = viewById;
-        mTerminalView.isLogView = isLogView;
+
+        viewPager = terminalActivity.findViewById(R.id.viewpager);
+        terminalContainer = terminalActivity.findViewById(R.id.terminal_container);
+        mainView = terminalActivity.findViewById(R.id.mainView);
+        drawerLayout = getDrawer();
+        leftDrawerList = terminalActivity.findViewById(R.id.left_drawer_list);
         mTerminalView.setOnKeyListener(new InputDispatcher(terminalActivity, this));
 
         // is this needed?
@@ -97,86 +108,88 @@ public class TerminalController {
         // reload terminal style
         reloadTerminalStyling();
 
-        if (!mTerminalView.isLogView) {
-            final ViewPager viewPager = terminalActivity.findViewById(R.id.viewpager);
-            if (mSettings.isExtraKeysEnabled()) viewPager.setVisibility(View.VISIBLE);
+        viewPager.setAdapter(new PagerAdapter() {
+            @Override
+            public int getCount() {
+                return 2;
+            }
 
-            TerminalActivity finalTerminalActivity = terminalActivity;
-            viewPager.setAdapter(new PagerAdapter() {
-                @Override
-                public int getCount() {
-                    return 2;
-                }
+            @Override
+            public boolean isViewFromObject(@NonNull View view, @NonNull Object object) {
+                return view == object;
+            }
 
-                @Override
-                public boolean isViewFromObject(@NonNull View view, @NonNull Object object) {
-                    return view == object;
-                }
+            @NonNull
+            @Override
+            public Object instantiateItem(@NonNull ViewGroup collection, int position) {
+                View layout;
 
-                @NonNull
-                @Override
-                public Object instantiateItem(@NonNull ViewGroup collection, int position) {
-                    View layout;
+                if (position == 0) {
+                    layout = mExtraKeysView = (ExtraKeysView) inflater.inflate(R.layout.extra_keys_main, collection, false);
+                } else {
+                    layout = inflater.inflate(R.layout.extra_keys_right, collection, false);
+                    final EditText editText = layout.findViewById(R.id.text_input);
 
-                    if (position == 0) {
-                        layout = mExtraKeysView = (ExtraKeysView) inflater.inflate(R.layout.extra_keys_main, collection, false);
-                    } else {
-                        layout = inflater.inflate(R.layout.extra_keys_right, collection, false);
-                        final EditText editText = layout.findViewById(R.id.text_input);
+                    editText.setOnEditorActionListener((v, actionId, event) -> {
+                        TerminalSession session = mTerminalView.getCurrentSession();
 
-                        editText.setOnEditorActionListener((v, actionId, event) -> {
-                            TerminalSession session = mTerminalView.getCurrentSession();
+                        if (session != null) {
+                            if (session.isRunning()) {
+                                String textToSend = editText.getText().toString();
 
-                            if (session != null) {
-                                if (session.isRunning()) {
-                                    String textToSend = editText.getText().toString();
-
-                                    if (textToSend.length() == 0) {
-                                        textToSend = "\r";
-                                    }
-
-                                    session.write(textToSend);
+                                if (textToSend.length() == 0) {
+                                    textToSend = "\r";
                                 }
 
-                                editText.setText("");
+                                session.write(textToSend);
                             }
 
-                            return true;
-                        });
-                    }
-
-                    collection.addView(layout);
-
-                    return layout;
-                }
-
-                @Override
-                public void destroyItem(@NonNull ViewGroup collection, int position, @NonNull Object view) {
-                    collection.removeView((View) view);
-                }
-            });
-
-            viewPager.addOnPageChangeListener(new ViewPager.SimpleOnPageChangeListener() {
-                @Override
-                public void onPageSelected(int position) {
-                    if (position == 0) {
-                        mTerminalView.requestFocus();
-                    } else {
-                        final EditText editText = viewPager.findViewById(R.id.text_input);
-
-                        if (editText != null) {
-                            editText.requestFocus();
+                            editText.setText("");
                         }
+
+                        return true;
+                    });
+                }
+
+                collection.addView(layout);
+
+                return layout;
+            }
+
+            @Override
+            public void destroyItem(@NonNull ViewGroup collection, int position, @NonNull Object view) {
+                collection.removeView((View) view);
+            }
+        });
+
+        viewPager.addOnPageChangeListener(new ViewPager.SimpleOnPageChangeListener() {
+            @Override
+            public void onPageSelected(int position) {
+                if (position == 0) {
+                    mTerminalView.requestFocus();
+                } else {
+                    final EditText editText = viewPager.findViewById(R.id.text_input);
+
+                    if (editText != null) {
+                        editText.requestFocus();
                     }
                 }
-            });
-        }
+            }
+        });
+
+        terminalActivity.findViewById(R.id.toggle_keyboard_button).setOnClickListener(v -> {
+            InputMethodManager imm = (InputMethodManager) terminalActivity.getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) imm.toggleSoftInput(InputMethodManager.SHOW_IMPLICIT, 0);
+        });
+        terminalActivity.findViewById(R.id.toggle_keyboard_button).setOnLongClickListener(v -> {
+            if (terminalControllerService.getCurrentSession().isShell()) toggleShowExtraKeys();
+            return true;
+        });
 
         terminalActivity.registerForContextMenu(mTerminalView);
 
         terminalControllerService = new TerminalControllerService();
         terminalControllerService.terminalController = this;
-        terminalControllerService.isLogView = isLogView;
 
         Intent serviceIntent = new Intent(terminalActivity, TerminalService.class);
         // Start the service and make it run regardless of who is bound to it:
@@ -184,6 +197,138 @@ public class TerminalController {
         if (!terminalActivity.bindService(serviceIntent, terminalControllerService, 0)) {
             throw new RuntimeException("bindService() failed");
         }
+
+        Button create_shell = terminalActivity.findViewById(R.id.create_new_shell);
+        create_shell.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                terminalControllerService.createShell();
+            }
+        });
+    }
+
+
+
+    public void onStart() {
+        mIsVisible = true;
+        if (mTermService != null) {
+            // The service has connected, but data may have changed since we were last in the foreground.
+            switchToSession(getStoredCurrentSessionOrLast());
+            terminalControllerService.mListViewAdapter.notifyDataSetChanged();
+        }
+
+        // The current terminal session may have changed while being away, force
+        // a refresh of the displayed terminal:
+        mTerminalView.onScreenUpdated();
+    }
+
+    public void onStop() {
+        mIsVisible = false;
+        TerminalSession currentSession = mTerminalView.getCurrentSession();
+        if (currentSession != null) TerminalPreferences.storeCurrentSession(activity, currentSession);
+        drawerLayout.closeDrawers();
+    }
+
+    public void onDestroy() {
+        if (mTermService != null) {
+            // Do not leave service with references to activity.
+            mTermService.mSessionChangeCallback = null;
+            mTermService = null;
+        }
+        activity.unbindService(terminalControllerService);
+    }
+
+    private static final int CONTEXTMENU_VNC_VIEWER = 0;
+    private static final int CONTEXTMENU_SHOW_HELP = 1;
+    private static final int CONTEXTMENU_SELECT_URL_ID = 2;
+    private static final int CONTEXTMENU_SHARE_TRANSCRIPT_ID = 3;
+    private static final int CONTEXTMENU_PASTE_ID = 4;
+    private static final int CONTEXTMENU_RESET_TERMINAL_ID = 5;
+    private static final int CONTEXTMENU_CONSOLE_STYLE = 6;
+    private static final int CONTEXTMENU_TOGGLE_IGNORE_BELL = 7;
+
+    public void onCreateContextMenu(ContextMenu menu, View v, ContextMenu.ContextMenuInfo menuInfo) {
+        TerminalSession currentSession = mTerminalView.getCurrentSession();
+
+        if (currentSession == null) {
+            return;
+        }
+
+        menu.add(Menu.NONE, 99, Menu.NONE, "printf something to the terminal");
+        menu.add(Menu.NONE, CONTEXTMENU_SHOW_HELP, Menu.NONE, R.string.menu_show_help);
+        menu.add(Menu.NONE, CONTEXTMENU_SELECT_URL_ID, Menu.NONE, R.string.menu_select_url);
+        menu.add(Menu.NONE, CONTEXTMENU_SHARE_TRANSCRIPT_ID, Menu.NONE, R.string.menu_share_transcript);
+        menu.add(Menu.NONE, CONTEXTMENU_RESET_TERMINAL_ID, Menu.NONE, R.string.menu_reset_terminal);
+        menu.add(Menu.NONE, CONTEXTMENU_CONSOLE_STYLE, Menu.NONE, R.string.menu_console_style);
+    }
+
+    /**
+     * The last toast shown, used cancel current toast before showing new in {@link #showToast(String, boolean)}.
+     */
+    private Toast mLastToast;
+
+    /**
+     * If between onResume() and onStop(). Note that only one session is in the foreground of the terminal view at the
+     * time, so if the session causing a change is not in the foreground it should probably be treated as background.
+     */
+    public boolean mIsVisible;
+
+    public boolean onContextItemSelected(MenuItem item) {
+        TerminalSession session = mTerminalView.getCurrentSession();
+
+        switch (item.getItemId()) {
+            case 99: {
+                JNI.puts("TERMINAL: invoking printf");
+                JNI.test_puts();
+                return true;
+            }
+            case CONTEXTMENU_SHOW_HELP:
+                activity.startActivity(new Intent(activity, HelpActivity.class));
+                return true;
+            case CONTEXTMENU_CONSOLE_STYLE:
+                terminalStylingDialog();
+                return true;
+            case CONTEXTMENU_SELECT_URL_ID:
+                showUrlSelection();
+                return true;
+            case CONTEXTMENU_SHARE_TRANSCRIPT_ID:
+                if (session != null) {
+                    Intent intent = new Intent(Intent.ACTION_SEND);
+                    intent.setType("text/plain");
+                    String transcriptText = session.getEmulator().getScreen().getTranscriptTextWithoutJoinedLines().trim();
+                    // See https://github.com/termux/termux-app/issues/1166.
+                    final int MAX_LENGTH = 100_000;
+                    if (transcriptText.length() > MAX_LENGTH) {
+                        int cutOffIndex = transcriptText.length() - MAX_LENGTH;
+                        int nextNewlineIndex = transcriptText.indexOf('\n', cutOffIndex);
+                        if (nextNewlineIndex != -1 && nextNewlineIndex != transcriptText.length() - 1) {
+                            cutOffIndex = nextNewlineIndex + 1;
+                        }
+                        transcriptText = transcriptText.substring(cutOffIndex).trim();
+                    }
+                    intent.putExtra(Intent.EXTRA_TEXT, transcriptText);
+                    intent.putExtra(Intent.EXTRA_SUBJECT, activity.getString(R.string.share_transcript_file_name));
+                    activity.startActivity(Intent.createChooser(intent, activity.getString(R.string.share_transcript_chooser_title)));
+                }
+                return true;
+            case CONTEXTMENU_PASTE_ID:
+                doPaste();
+                return true;
+            case CONTEXTMENU_RESET_TERMINAL_ID: {
+                if (session != null) {
+                    session.reset(true);
+                    showToast(activity.getResources().getString(R.string.reset_toast_notification), true);
+                }
+                return true;
+            }
+
+            default:
+                return false;
+        }
+    }
+
+    public void onCreateOptionsMenu(Menu menu) {
+        mTerminalView.showContextMenu();
     }
 
     public void updateBackgroundColor() {
@@ -305,10 +450,20 @@ public class TerminalController {
      * Try switching to session and note about it, but do nothing if already displaying the session.
      */
     public void switchToSession(TerminalSession session) {
+        terminalControllerService.mListViewAdapter.notifyDataSetChanged();
         if (mTerminalView.attachSession(session)) {
             if (mIsVisible) {
                 final int indexOfSession = mTermService.getSessions().indexOf(session);
-                terminalControllerService.mListViewAdapter.notifyDataSetChanged();
+
+                leftDrawerList.setItemChecked(indexOfSession, true);
+                leftDrawerList.smoothScrollToPosition(indexOfSession);
+
+                if (session.isShell()) {
+                    if (mSettings.isExtraKeysEnabled()) viewPager.setVisibility(View.VISIBLE);
+                } else {
+                    if (mSettings.isExtraKeysEnabled()) viewPager.setVisibility(View.INVISIBLE);
+                }
+
                 showToast(toToastTitle(session), false);
             }
 
@@ -328,128 +483,6 @@ public class TerminalController {
             if (--index < 0) index = mTermService.getSessions().size() - 1;
         }
         switchToSession(mTermService.getSessions().get(index));
-    }
-
-
-    public void onStart() {
-        mIsVisible = true;
-        if (mTermService != null) {
-            // The service has connected, but data may have changed since we were last in the foreground.
-            switchToSession(getStoredCurrentSessionOrLast());
-            terminalControllerService.mListViewAdapter.notifyDataSetChanged();
-        }
-
-        // The current terminal session may have changed while being away, force
-        // a refresh of the displayed terminal:
-        mTerminalView.onScreenUpdated();
-    }
-
-    public void onStop() {
-        mIsVisible = false;
-        TerminalSession currentSession = mTerminalView.getCurrentSession();
-        if (currentSession != null) TerminalPreferences.storeCurrentSession(activity, currentSession);
-    }
-
-    public void onDestroy() {
-        if (mTermService != null) {
-            // Do not leave service with references to activity.
-            mTermService.mSessionChangeCallback = null;
-            mTermService = null;
-        }
-        activity.unbindService(terminalControllerService);
-    }
-
-    private static final int CONTEXTMENU_VNC_VIEWER = 0;
-    private static final int CONTEXTMENU_SHOW_HELP = 1;
-    private static final int CONTEXTMENU_SELECT_URL_ID = 2;
-    private static final int CONTEXTMENU_SHARE_TRANSCRIPT_ID = 3;
-    private static final int CONTEXTMENU_PASTE_ID = 4;
-    private static final int CONTEXTMENU_RESET_TERMINAL_ID = 5;
-    private static final int CONTEXTMENU_CONSOLE_STYLE = 6;
-    private static final int CONTEXTMENU_TOGGLE_IGNORE_BELL = 7;
-
-    public void onCreateContextMenu(ContextMenu menu, View v, ContextMenu.ContextMenuInfo menuInfo) {
-        TerminalSession currentSession = mTerminalView.getCurrentSession();
-
-        if (currentSession == null) {
-            return;
-        }
-
-        menu.add(Menu.NONE, 99, Menu.NONE, "printf something to the terminal");
-        menu.add(Menu.NONE, CONTEXTMENU_SHOW_HELP, Menu.NONE, R.string.menu_show_help);
-        menu.add(Menu.NONE, CONTEXTMENU_SELECT_URL_ID, Menu.NONE, R.string.menu_select_url);
-        menu.add(Menu.NONE, CONTEXTMENU_SHARE_TRANSCRIPT_ID, Menu.NONE, R.string.menu_share_transcript);
-        menu.add(Menu.NONE, CONTEXTMENU_RESET_TERMINAL_ID, Menu.NONE, R.string.menu_reset_terminal);
-        menu.add(Menu.NONE, CONTEXTMENU_CONSOLE_STYLE, Menu.NONE, R.string.menu_console_style);
-    }
-
-    /**
-     * The last toast shown, used cancel current toast before showing new in {@link #showToast(String, boolean)}.
-     */
-    private Toast mLastToast;
-
-    /**
-     * If between onResume() and onStop(). Note that only one session is in the foreground of the terminal view at the
-     * time, so if the session causing a change is not in the foreground it should probably be treated as background.
-     */
-    public boolean mIsVisible;
-
-    public boolean onContextItemSelected(MenuItem item) {
-        TerminalSession session = mTerminalView.getCurrentSession();
-
-        switch (item.getItemId()) {
-            case 99: {
-                JNI.printf("TERMINAL: invoking printf");
-                JNI.test_printf();
-                return true;
-            }
-            case CONTEXTMENU_SHOW_HELP:
-                activity.startActivity(new Intent(activity, HelpActivity.class));
-                return true;
-            case CONTEXTMENU_CONSOLE_STYLE:
-                terminalStylingDialog();
-                return true;
-            case CONTEXTMENU_SELECT_URL_ID:
-                showUrlSelection();
-                return true;
-            case CONTEXTMENU_SHARE_TRANSCRIPT_ID:
-                if (session != null) {
-                    Intent intent = new Intent(Intent.ACTION_SEND);
-                    intent.setType("text/plain");
-                    String transcriptText = session.getEmulator().getScreen().getTranscriptTextWithoutJoinedLines().trim();
-                    // See https://github.com/termux/termux-app/issues/1166.
-                    final int MAX_LENGTH = 100_000;
-                    if (transcriptText.length() > MAX_LENGTH) {
-                        int cutOffIndex = transcriptText.length() - MAX_LENGTH;
-                        int nextNewlineIndex = transcriptText.indexOf('\n', cutOffIndex);
-                        if (nextNewlineIndex != -1 && nextNewlineIndex != transcriptText.length() - 1) {
-                            cutOffIndex = nextNewlineIndex + 1;
-                        }
-                        transcriptText = transcriptText.substring(cutOffIndex).trim();
-                    }
-                    intent.putExtra(Intent.EXTRA_TEXT, transcriptText);
-                    intent.putExtra(Intent.EXTRA_SUBJECT, activity.getString(R.string.share_transcript_file_name));
-                    activity.startActivity(Intent.createChooser(intent, activity.getString(R.string.share_transcript_chooser_title)));
-                }
-                return true;
-            case CONTEXTMENU_PASTE_ID:
-                doPaste();
-                return true;
-            case CONTEXTMENU_RESET_TERMINAL_ID: {
-                if (session != null) {
-                    session.reset(true);
-                    showToast(activity.getResources().getString(R.string.reset_toast_notification), true);
-                }
-                return true;
-            }
-
-            default:
-                return false;
-        }
-    }
-
-    public void onCreateOptionsMenu(Menu menu) {
-        mTerminalView.showContextMenu();
     }
 
     /**
@@ -685,5 +718,17 @@ public class TerminalController {
         }
 
         return toastTitle.toString();
+    }
+
+    public boolean onBackPressed() {
+        if (getDrawer().isDrawerOpen(Gravity.LEFT)) {
+            getDrawer().closeDrawers();
+            return true;
+        }
+        return false;
+    }
+
+    public DrawerLayout getDrawer() {
+        return (DrawerLayout) activity.findViewById(R.id.drawer_layout);
     }
 }

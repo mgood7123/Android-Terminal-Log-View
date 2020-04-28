@@ -292,6 +292,7 @@ JNIEXPORT jint JNICALL Java_alpine_term_emulator_JNI_createLog(
     jstring cwd,
     jobjectArray args,
     jobjectArray envVars,
+    jintArray processIdArray,
     jint rows,
     jint columns)
 {
@@ -343,6 +344,12 @@ JNIEXPORT jint JNICALL Java_alpine_term_emulator_JNI_createLog(
         free(envp);
     }
 
+    int* pProcId = (int*) (*env)->GetPrimitiveArrayCritical(env, processIdArray, NULL);
+    if (!pProcId) return throw_runtime_exception(env, "JNI call GetPrimitiveArrayCritical(processIdArray, &isCopy) failed");
+
+    *pProcId = getpid();
+    (*env)->ReleasePrimitiveArrayCritical(env, processIdArray, pProcId, 0);
+
     return ptm;
 }
 
@@ -381,11 +388,11 @@ JNIEXPORT void JNICALL Java_alpine_term_emulator_JNI_close(JNIEnv* ALPINE_TERM_U
     close(fileDescriptor);
 }
 
-JNIEXPORT void JNICALL Java_alpine_term_emulator_JNI_test_1printf(JNIEnv * ALPINE_TERM_UNUSED(env), jclass ALPINE_TERM_UNUSED(clazz)) {
+JNIEXPORT void JNICALL Java_alpine_term_emulator_JNI_test_1puts(JNIEnv * ALPINE_TERM_UNUSED(env), jclass ALPINE_TERM_UNUSED(clazz)) {
     printf("HELLO FROM NATIVE CPP\n");
 }
 
-JNIEXPORT void JNICALL Java_alpine_term_emulator_JNI_printf(JNIEnv * ALPINE_TERM_UNUSED(env), jclass ALPINE_TERM_UNUSED(clazz), jstring fmt) {
+JNIEXPORT void JNICALL Java_alpine_term_emulator_JNI_puts(JNIEnv * ALPINE_TERM_UNUSED(env), jclass ALPINE_TERM_UNUSED(clazz), jstring fmt) {
     char const* fmt_utf8 = (*env)->GetStringUTFChars(env, fmt, NULL);
     printf("%s\n", fmt_utf8);
     (*env)->ReleaseStringUTFChars(env, fmt, fmt_utf8);

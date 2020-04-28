@@ -53,8 +53,10 @@ import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.ArrayAdapter;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ListView;
+import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -103,15 +105,63 @@ public final class TerminalActivity extends Activity {
         super.onCreate(bundle);
 
         // set log view
-        setContentView(R.layout.terminal_view);
+        setContentView(R.layout.slide_out_terminal);
 
-        // obtain view instance
+        // obtain log view instance
         terminalController = new TerminalController();
-        terminalController.onCreate(
-            this,
-            findViewById(R.id.terminal_view),
-            true
-        );
+        terminalController.onCreate(this, findViewById(R.id.terminal_view));
+
+
+        Button toggleTerminal = findViewById(R.id.toggle_terminal);
+        int visibility = terminalController.terminalContainer.getVisibility();
+        if (visibility == View.INVISIBLE) {
+            toggleTerminal.setText(R.string.Show_LogTerminal);
+        } else {
+            toggleTerminal.setText(R.string.Hide_LogTerminal);
+        }
+        toggleTerminal.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                int visibility = terminalController.terminalContainer.getVisibility();
+                if (visibility == View.INVISIBLE) {
+                    // if terminal is not shown, and this button is clicked, then show the terminal
+                    terminalController.mainView.setVisibility(View.INVISIBLE);
+                    terminalController.terminalContainer.setVisibility(View.VISIBLE);
+                    toggleTerminal.setText(R.string.Hide_LogTerminal);
+                } else {
+                    // if terminal is shown, and this button is clicked, then hide the terminal
+                    terminalController.terminalContainer.setVisibility(View.INVISIBLE);
+                    terminalController.mainView.setVisibility(View.VISIBLE);
+                    toggleTerminal.setText(R.string.Show_LogTerminal);
+                }
+            }
+        });
+
+        RelativeLayout rl = findViewById(R.id.mainView);
+
+        TextView tv = new TextView(this);
+
+        tv.setTypeface(Typeface.MONOSPACE);
+        tv.setLayoutParams(new ViewGroup.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+        tv.setPaintFlags(tv.getPaintFlags() | Paint.ANTI_ALIAS_FLAG);
+        tv.setTextSize(24);
+
+        StringBuilder stringBuilder = new StringBuilder();
+
+        stringBuilder.append("1. Tap on SHOW LOG/TERMINAL\n");
+        stringBuilder.append("2. Slide -> from the left of the screen to open\n");
+        stringBuilder.append("   the terminal list\n");
+        stringBuilder.append("\nThe default terminal is the log terminal\n");
+        stringBuilder.append("    This terminal prints all stdout and stderr\n");
+        stringBuilder.append("    output from the current Application\n");
+        stringBuilder.append("    (this application), and it cannot be removed\n");
+        stringBuilder.append("\nTap on the \"Add Shell\" button to create a new\n");
+        stringBuilder.append("shell\n");
+        tv.setText(stringBuilder.toString());
+
+        rl.addView(tv);
     }
 
     @Override
@@ -153,6 +203,6 @@ public final class TerminalActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        super.onBackPressed();
+        if (!terminalController.onBackPressed()) super.onBackPressed();
     }
 }

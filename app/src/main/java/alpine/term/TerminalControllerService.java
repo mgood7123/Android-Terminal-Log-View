@@ -4,27 +4,30 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.ComponentName;
 import android.content.Context;
-import android.content.Intent;
 import android.content.ServiceConnection;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Typeface;
-import android.os.Bundle;
 import android.os.IBinder;
 import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.TextUtils;
 import android.text.style.StyleSpan;
-import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.ArrayAdapter;
+import android.widget.ListView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 
+import java.util.Locale;
+
+import alpine.term.emulator.JNI;
 import alpine.term.emulator.TerminalSession;
+
+import static android.os.SystemClock.sleep;
 
 public class TerminalControllerService implements ServiceConnection {
 
@@ -34,7 +37,6 @@ public class TerminalControllerService implements ServiceConnection {
      * Initialized in {@link #onServiceConnected(ComponentName, IBinder)}.
      */
     ArrayAdapter<TerminalSession> mListViewAdapter;
-    boolean isLogView = false; // start as shell
 
     @Override
     public void onServiceConnected(ComponentName componentName, IBinder service) {
@@ -63,15 +65,18 @@ public class TerminalControllerService implements ServiceConnection {
             public void onSessionFinished(final TerminalSession finishedSession) {
                 // Needed for resetting font size on next application launch
                 // otherwise it will be reset only after force-closing.
-                terminalController.currentFontSize = -1;
+                if (terminalController.mTermService.getSessions().isEmpty()) {
+                    terminalController.currentFontSize = -1;
+                    if (terminalController.mTermService.mWantsToStop) {
+                        // The service wants to stop as soon as possible.
+                        terminalController.activity.finish();
+                        return;
+                    }
 
-                if (terminalController.mTermService.mWantsToStop) {
-                    // The service wants to stop as soon as possible.
-                    terminalController.activity.finish();
-                    return;
+                    terminalController.mTermService.terminateService();
+                } else {
+                    terminalController.mTermService.removeSession(finishedSession);
                 }
-
-                terminalController.mTermService.terminateService();
             }
 
             @Override
@@ -139,19 +144,60 @@ public class TerminalControllerService implements ServiceConnection {
             }
         };
 
+        ListView listView = terminalController.activity.findViewById(R.id.left_drawer_list);
+        mListViewAdapter = new ArrayAdapter<TerminalSession>(terminalController.activity.getApplicationContext(), R.layout.line_in_drawer, terminalController.mTermService.getSessions()) {
+            final StyleSpan boldSpan = new StyleSpan(Typeface.BOLD);
+            final StyleSpan italicSpan = new StyleSpan(Typeface.ITALIC);
+
+            @NonNull
+            @Override
+            public View getView(int position, View convertView, @NonNull ViewGroup parent) {
+                View row = convertView;
+                if (row == null) {
+                    row = terminalController.inflater.inflate(R.layout.line_in_drawer, parent, false);
+                }
+
+                TerminalSession sessionAtRow = getItem(position);
+                boolean sessionRunning = sessionAtRow.isRunning();
+
+                TextView firstLineView = row.findViewById(R.id.row_line);
+
+                String name = sessionAtRow.mSessionName;
+                String sessionTitle = sessionAtRow.getTitle();
+
+                String numberPart = "[" + (position + 1) + "] ";
+                String sessionNamePart = (TextUtils.isEmpty(name) ? "" : name);
+                String sessionTitlePart = (TextUtils.isEmpty(sessionTitle) ? "" : ((sessionNamePart.isEmpty() ? "" : "\n") + sessionTitle));
+
+                String text = numberPart + sessionNamePart + sessionTitlePart;
+                SpannableString styledText = new SpannableString(text);
+                styledText.setSpan(boldSpan, 0, numberPart.length() + sessionNamePart.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                styledText.setSpan(italicSpan, numberPart.length() + sessionNamePart.length(), text.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+
+                firstLineView.setText(styledText);
+
+                if (sessionRunning) {
+                    firstLineView.setPaintFlags(firstLineView.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
+                } else {
+                    firstLineView.setPaintFlags(firstLineView.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
+                }
+                int color = sessionRunning || sessionAtRow.getExitStatus() == 0 ? Color.BLACK : Color.RED;
+                firstLineView.setTextColor(color);
+                return row;
+            }
+        };
+
+        listView.setAdapter(mListViewAdapter);
+
+        listView.setOnItemClickListener((parent, view, position, id) -> {
+            TerminalSession clickedSession = mListViewAdapter.getItem(position);
+            terminalController.switchToSession(clickedSession);
+            terminalController.getDrawer().closeDrawers();
+        });
+
         if (terminalController.mTermService.getSessions().isEmpty()) {
             if (terminalController.mIsVisible) {
-                if (terminalController.mTermService == null) return; // Activity might have been destroyed.
-                try {
-                    TerminalSession session;
-
-                    session = terminalController.mTermService.createShellSession(isLogView);
-                    session.mSessionName = "SHELL";
-                    terminalController.mTerminalView.attachSession(session);
-                    terminalController.switchToSession(terminalController.mTermService.getSessions().get(0));
-                } catch (WindowManager.BadTokenException e) {
-                    // Activity finished - ignore.
-                }
+                createLog();
             } else {
                 // The service connected while not in foreground - just bail out.
                 terminalController.activity.finish();
@@ -165,5 +211,57 @@ public class TerminalControllerService implements ServiceConnection {
     public void onServiceDisconnected(ComponentName name) {
         // Respect being stopped from the TerminalService notification action.
         terminalController.activity.finish();
+    }
+
+    public TerminalSession getCurrentSession() {
+        return
+            terminalController.mTermService == null
+                ? null : terminalController.mTerminalView.getCurrentSession();
+    }
+
+    public TerminalSession createLog() {
+        if (terminalController.mTermService == null) return null;
+        TerminalSession session;
+
+        session = terminalController.mTermService.createShellSession(true);
+        terminalController.mTerminalView.attachSession(session);
+
+        int logPid;
+        logPid = session.getPid();
+        session.mSessionName = "LOG [pid=" + logPid + "]";
+        JNI.puts(String.format(Locale.ENGLISH, "log has started, pid is %d", logPid));
+
+        terminalController.switchToSession(session);
+        mListViewAdapter.notifyDataSetChanged();
+        return session;
+    }
+
+    public TerminalSession createShell() {
+        if (terminalController.mTermService == null) return null;
+        TerminalSession session;
+
+        session = terminalController.mTermService.createShellSession(false);
+        terminalController.mTerminalView.attachSession(session);
+
+        int shellPid;
+        shellPid = session.getPid();
+        session.mSessionName = "SHELL [pid=" + shellPid + "]";
+        JNI.puts(String.format(Locale.ENGLISH, "shell has started, pid is %d", shellPid));
+
+        terminalController.switchToSession(session);
+        mListViewAdapter.notifyDataSetChanged();
+        return session;
+    }
+
+    public Boolean isCurrentSessionShell() {
+        return
+            terminalController.mTermService == null
+                ? null : terminalController.mTerminalView.getCurrentSession().isShell();
+    }
+
+    public Boolean isCurrentSessionLogView() {
+        return
+            terminalController.mTermService == null
+                ? null : terminalController.mTerminalView.getCurrentSession().isLogView();
     }
 }

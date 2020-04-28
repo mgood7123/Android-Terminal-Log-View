@@ -25,6 +25,7 @@ package alpine.term.emulator;
 import android.annotation.SuppressLint;
 import android.os.Handler;
 import android.os.Message;
+import android.os.SystemClock;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.system.OsConstants;
@@ -206,7 +207,7 @@ public final class TerminalSession extends TerminalOutput {
             public void run() {
                 {
                     String fmt = "starting stdout/stderr reader";
-                    JNI.printf(fmt);
+                    JNI.puts(fmt);
                     Log.w(EmulatorDebug.LOG_TAG, fmt);
                 }
                 try (InputStream termIn = new FileInputStream(terminalFileDescriptorWrapped)) {
@@ -238,7 +239,7 @@ public final class TerminalSession extends TerminalOutput {
             public void run() {
                 {
                     String fmt = "starting stdin writer";
-                    JNI.printf(fmt);
+                    JNI.puts(fmt);
                     Log.w(EmulatorDebug.LOG_TAG, fmt);
                 }
                 final byte[] buffer = new byte[4096];
@@ -264,18 +265,20 @@ public final class TerminalSession extends TerminalOutput {
 
     public void createLogSession(int columns, int rows) {
         Log.w(EmulatorDebug.LOG_TAG, "creating log");
-        mTerminalFileDescriptor = JNI.createLog(mShellPath, mCwd, mArgs, mEnv, rows, columns);
-        JNI.printf("created log");
+        int[] processId = new int[1];
+        mTerminalFileDescriptor = JNI.createLog(mShellPath, mCwd, mArgs, mEnv, processId, rows, columns);
+        mShellPid = processId[0];
+        JNI.puts("created log");
         Log.w(EmulatorDebug.LOG_TAG, "created log");
 
         final FileDescriptor terminalFileDescriptorWrapped = wrapFileDescriptor(mTerminalFileDescriptor);
 
-        new Thread("TermSessionInputReader[log]") {
+        new Thread("TermSessionInputReader[log (pid=" + mShellPid + ")]") {
             @Override
             public void run() {
                 {
                     String fmt = "starting stdout/stderr reader";
-                    JNI.printf(fmt);
+                    JNI.puts(fmt);
                     Log.w(EmulatorDebug.LOG_TAG, fmt);
                 }
                 try (InputStream termIn = new FileInputStream(terminalFileDescriptorWrapped)) {
@@ -303,6 +306,8 @@ public final class TerminalSession extends TerminalOutput {
         }.start();
     }
 
+    boolean should_exit = false;
+
     /**
      * Set the terminal emulator's window size and start terminal emulation.
      *
@@ -312,23 +317,25 @@ public final class TerminalSession extends TerminalOutput {
     public void initializeEmulator(int columns, int rows) {
         mEmulator = new TerminalEmulator(this, columns, rows, /* transcript= */5000);
 
-        if (isLogView) createLogSession(columns, rows);
-        else new Thread("TermSession") {
-            @Override
-            public void run() {
-                while(true) {
-                    createShellSession(columns, rows);
+        if (isLogView) {
+            createLogSession(columns, rows);
+        } else {
+            createShellSession(columns, rows);
+            new Thread("TermSession[pid=" + mShellPid + "]") {
+                @Override
+                public void run() {
                     int processExitCode = JNI.waitFor(mShellPid);
-                    byte[] bytesToWrite = String.format(Locale.ENGLISH, "shell returned %d\n\rrestarting...\n\r", processExitCode).getBytes(StandardCharsets.UTF_8);
+                    byte[] bytesToWrite = String.format(Locale.ENGLISH, "shell returned %d\n\r", processExitCode).getBytes(StandardCharsets.UTF_8);
                     mEmulator.append(bytesToWrite, bytesToWrite.length);
-                    JNI.close(mTerminalFileDescriptor);
+                    should_exit = true;
+                    mMainThreadHandler.sendMessage(mMainThreadHandler.obtainMessage(MSG_PROCESS_EXITED, processExitCode));
                 }
-            }
-        }.start();
+            }.start();
+        }
 
         {
             String fmt = "emulator initialized";
-            JNI.printf(fmt);
+            JNI.puts(fmt);
             Log.w(EmulatorDebug.LOG_TAG, fmt);
         }
     }
@@ -425,7 +432,7 @@ public final class TerminalSession extends TerminalOutput {
     }
 
     public synchronized boolean isRunning() {
-        return mShellPid != -1;
+        return mShellPid != -1 && !should_exit;
     }
 
     /** Only valid if not {@link #isRunning()}. */
@@ -452,4 +459,11 @@ public final class TerminalSession extends TerminalOutput {
         return mShellPid;
     }
 
+    public boolean isLogView() {
+        return isLogView;
+    }
+
+    public boolean isShell() {
+        return !isLogView;
+    }
 }

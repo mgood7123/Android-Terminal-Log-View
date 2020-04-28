@@ -49,9 +49,14 @@
     <string name="style_toast_theme_applied">Applying color theme:</string>
 
     <!-- Drawer -->
-    <string name="button_toggle_soft_keyboard">Toggle keyboard</string>
+    <string name="button_toggle_soft_keyboard">Toggle keyboard (long press: toggle extra keys)</string>
 
     <!-- Notification -->
     <string name="notification_action_wake_lock">Acquire wakelock</string>
     <string name="notification_action_wake_unlock">Release wakelock</string>
+
+    <!-- Everything else -->
+    <string name="Show_LogTerminal">Show Log/Terminal</string>
+    <string name="Hide_LogTerminal">Hide Log/Terminal</string>
+    <string name="create_new_shell">Create new shell</string>
 </resources>

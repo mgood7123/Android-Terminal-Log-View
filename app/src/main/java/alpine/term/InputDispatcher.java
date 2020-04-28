@@ -66,7 +66,7 @@ public final class InputDispatcher implements TerminalViewClient {
     @Override
     public void onSingleTapUp(MotionEvent e) {
         // do nothing if this is attached to a log view
-        if (!terminalController.mTerminalView.isLogView) {
+        if (terminalController.terminalControllerService.isCurrentSessionShell()) {
             InputMethodManager mgr = (InputMethodManager) context.getSystemService(Context.INPUT_METHOD_SERVICE);
             if (mgr != null)
                 mgr.showSoftInput(terminalController.mTerminalView, InputMethodManager.SHOW_IMPLICIT);
@@ -253,10 +253,10 @@ public final class InputDispatcher implements TerminalViewClient {
         if (inputDevice != null && inputDevice.getKeyboardType() == InputDevice.KEYBOARD_TYPE_ALPHABETIC) {
             // Do not steal dedicated buttons from a full external keyboard.
             return false;
-        } else if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN && !terminalController.mTerminalView.isLogView) {
+        } else if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN && terminalController.terminalControllerService.isCurrentSessionShell()) {
             mVirtualControlKeyDown = down;
             return true;
-        } else if (keyCode == KeyEvent.KEYCODE_VOLUME_UP && !terminalController.mTerminalView.isLogView) {
+        } else if (keyCode == KeyEvent.KEYCODE_VOLUME_UP && terminalController.terminalControllerService.isCurrentSessionShell()) {
             mVirtualFnKeyDown = down;
             return true;
         }
