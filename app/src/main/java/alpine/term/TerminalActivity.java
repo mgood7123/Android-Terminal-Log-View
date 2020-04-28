@@ -150,4 +150,9 @@ public final class TerminalActivity extends Activity {
         terminalController.onCreateOptionsMenu(menu);
         return false;
     }
+
+    @Override
+    public void onBackPressed() {
+        super.onBackPressed();
+    }
 }
