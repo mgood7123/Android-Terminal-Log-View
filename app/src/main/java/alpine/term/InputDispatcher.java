@@ -253,10 +253,10 @@ public final class InputDispatcher implements TerminalViewClient {
         if (inputDevice != null && inputDevice.getKeyboardType() == InputDevice.KEYBOARD_TYPE_ALPHABETIC) {
             // Do not steal dedicated buttons from a full external keyboard.
             return false;
-        } else if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+        } else if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN && !terminalController.mTerminalView.isLogView) {
             mVirtualControlKeyDown = down;
             return true;
-        } else if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
+        } else if (keyCode == KeyEvent.KEYCODE_VOLUME_UP && !terminalController.mTerminalView.isLogView) {
             mVirtualFnKeyDown = down;
             return true;
         }
