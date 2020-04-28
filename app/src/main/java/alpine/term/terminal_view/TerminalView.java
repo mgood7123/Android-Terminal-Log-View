@@ -70,7 +70,7 @@ import alpine.term.emulator.WcWidth;
 /** View displaying and interacting with a {@link TerminalSession}. */
 public final class TerminalView extends View {
 
-    boolean isLogView = true;
+    public boolean isLogView = false;
 
     /** Log view key and IME events. */
     private static final boolean LOG_KEY_EVENTS = false;

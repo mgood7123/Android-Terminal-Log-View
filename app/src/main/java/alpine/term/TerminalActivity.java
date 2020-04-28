@@ -150,6 +150,7 @@ public final class TerminalActivity extends Activity implements ServiceConnectio
 
         // obtain view instance
         mTerminalView = findViewById(R.id.terminal_view);
+        mTerminalView.isLogView = true;
         mTerminalView.setOnKeyListener(new InputDispatcher(this));
 
         // is this needed?
@@ -165,8 +166,87 @@ public final class TerminalActivity extends Activity implements ServiceConnectio
         mTerminalView.setTextSize(currentFontSize);
 
         // if mTerminalView.requestFocus(); is requested, making the ime keyboard show
+
+        // set font
 //        mTerminalView.setTypeface(Typeface.createFromAsset(getAssets(), "fonts/Inconsolata-LGC.otf"));
+
+        // reload terminal style
         reloadTerminalStyling();
+
+        if (!mTerminalView.isLogView) {
+            final ViewPager viewPager = findViewById(R.id.viewpager);
+            if (mSettings.isExtraKeysEnabled()) viewPager.setVisibility(View.VISIBLE);
+
+            viewPager.setAdapter(new PagerAdapter() {
+                @Override
+                public int getCount() {
+                    return 2;
+                }
+
+                @Override
+                public boolean isViewFromObject(@NonNull View view, @NonNull Object object) {
+                    return view == object;
+                }
+
+                @NonNull
+                @Override
+                public Object instantiateItem(@NonNull ViewGroup collection, int position) {
+                    LayoutInflater inflater = LayoutInflater.from(TerminalActivity.this);
+                    View layout;
+
+                    if (position == 0) {
+                        layout = mExtraKeysView = (ExtraKeysView) inflater.inflate(R.layout.extra_keys_main, collection, false);
+                    } else {
+                        layout = inflater.inflate(R.layout.extra_keys_right, collection, false);
+                        final EditText editText = layout.findViewById(R.id.text_input);
+
+                        editText.setOnEditorActionListener((v, actionId, event) -> {
+                            TerminalSession session = mTerminalView.getCurrentSession();
+
+                            if (session != null) {
+                                if (session.isRunning()) {
+                                    String textToSend = editText.getText().toString();
+
+                                    if (textToSend.length() == 0) {
+                                        textToSend = "\r";
+                                    }
+
+                                    session.write(textToSend);
+                                }
+
+                                editText.setText("");
+                            }
+
+                            return true;
+                        });
+                    }
+
+                    collection.addView(layout);
+
+                    return layout;
+                }
+
+                @Override
+                public void destroyItem(@NonNull ViewGroup collection, int position, @NonNull Object view) {
+                    collection.removeView((View) view);
+                }
+            });
+
+            viewPager.addOnPageChangeListener(new ViewPager.SimpleOnPageChangeListener() {
+                @Override
+                public void onPageSelected(int position) {
+                    if (position == 0) {
+                        mTerminalView.requestFocus();
+                    } else {
+                        final EditText editText = viewPager.findViewById(R.id.text_input);
+
+                        if (editText != null) {
+                            editText.requestFocus();
+                        }
+                    }
+                }
+            });
+        }
 
         registerForContextMenu(mTerminalView);
 

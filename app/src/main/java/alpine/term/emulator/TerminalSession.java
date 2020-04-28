@@ -36,7 +36,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -163,10 +165,12 @@ public final class TerminalSession extends TerminalOutput {
     private final String[] mArgs;
     private final String[] mEnv;
     private final String mCwd;
+    private final boolean isLogView;
 
-    public TerminalSession(String shellPath, String[] args, String[] env, String cwd, SessionChangedCallback changeCallback) {
+    public TerminalSession(boolean isLogView, String shellPath, String[] args, String[] env, String cwd, SessionChangedCallback changeCallback) {
         mChangeCallback = changeCallback;
 
+        this.isLogView = isLogView;
         this.mShellPath = shellPath;
         this.mArgs = args;
         this.mEnv = env;
@@ -188,15 +192,77 @@ public final class TerminalSession extends TerminalOutput {
         return (mEmulator == null) ? null : mEmulator.getTitle();
     }
 
-    /**
-     * Set the terminal emulator's window size and start terminal emulation.
-     *
-     * @param columns The number of columns in the terminal window.
-     * @param rows    The number of rows in the terminal window.
-     */
-    public void initializeEmulator(int columns, int rows) {
-        mEmulator = new TerminalEmulator(this, columns, rows, /* transcript= */5000);
+    public void createShellSession(int columns, int rows) {
+        Log.w(EmulatorDebug.LOG_TAG, "creating shell");
+        int[] processId = new int[1];
+        mTerminalFileDescriptor = JNI.createSubprocess(mShellPath, mCwd, mArgs, mEnv, processId, rows, columns);
+        mShellPid = processId[0];
+        Log.w(EmulatorDebug.LOG_TAG, "created shell");
 
+        final FileDescriptor terminalFileDescriptorWrapped = wrapFileDescriptor(mTerminalFileDescriptor);
+
+        new Thread("TermSessionInputReader[pid=" + mShellPid + "]") {
+            @Override
+            public void run() {
+                {
+                    String fmt = "starting stdout/stderr reader";
+                    JNI.printf(fmt);
+                    Log.w(EmulatorDebug.LOG_TAG, fmt);
+                }
+                try (InputStream termIn = new FileInputStream(terminalFileDescriptorWrapped)) {
+                    final byte[] buffer = new byte[4096];
+                    while (true) {
+                        Log.w(EmulatorDebug.LOG_TAG, "stdout/stderr reader: reading");
+                        int read = termIn.read(buffer);
+                        Log.w(EmulatorDebug.LOG_TAG, "stdout/stderr reader: read");
+                        if (read == -1) {
+                            Log.wtf(EmulatorDebug.LOG_TAG, "stdout/stderr reader return -1");
+                            return;
+                        }
+                        Log.w(EmulatorDebug.LOG_TAG, "stdout/stderr reader: writing");
+                        if (!mProcessToTerminalIOQueue.write(buffer, 0, read)) {
+                            Log.wtf(EmulatorDebug.LOG_TAG, "stdout/stderr reader [write] returned false (closed)");
+                            return;
+                        }
+                        Log.w(EmulatorDebug.LOG_TAG, "stdout/stderr reader: wrote");
+                        mMainThreadHandler.sendEmptyMessage(MSG_NEW_INPUT);
+                    }
+                } catch (Exception e) {
+                    // Ignore, just shutting down.
+                }
+            }
+        }.start();
+
+        new Thread("TermSessionOutputWriter[pid=" + mShellPid + "]") {
+            @Override
+            public void run() {
+                {
+                    String fmt = "starting stdin writer";
+                    JNI.printf(fmt);
+                    Log.w(EmulatorDebug.LOG_TAG, fmt);
+                }
+                final byte[] buffer = new byte[4096];
+                try (FileOutputStream termOut = new FileOutputStream(terminalFileDescriptorWrapped)) {
+                    while (true) {
+                        Log.w(EmulatorDebug.LOG_TAG, "stdin writer: reading");
+                        int bytesToWrite = mTerminalToProcessIOQueue.read(buffer, true);
+                        Log.w(EmulatorDebug.LOG_TAG, "stdin writer: read");
+                        if (bytesToWrite == -1) {
+                            Log.wtf(EmulatorDebug.LOG_TAG, "stdin writer return -1");
+                            return;
+                        }
+                        Log.w(EmulatorDebug.LOG_TAG, "stdin writer: writing");
+                        termOut.write(buffer, 0, bytesToWrite);
+                        Log.w(EmulatorDebug.LOG_TAG, "stdin writer: wrote");
+                    }
+                } catch (IOException e) {
+                    // Ignore.
+                }
+            }
+        }.start();
+    }
+
+    public void createLogSession(int columns, int rows) {
         Log.w(EmulatorDebug.LOG_TAG, "creating log");
         mTerminalFileDescriptor = JNI.createLog(mShellPath, mCwd, mArgs, mEnv, rows, columns);
         JNI.printf("created log");
@@ -235,34 +301,31 @@ public final class TerminalSession extends TerminalOutput {
                 }
             }
         }.start();
+    }
 
-//        new Thread("TermSessionOutputWriter[log]") {
-//            @Override
-//            public void run() {
-//                {
-//                    String fmt = "starting stdin writer";
-//                    JNI.printf(fmt);
-//                    Log.w(EmulatorDebug.LOG_TAG, fmt);
-//                }
-//                final byte[] buffer = new byte[4096];
-//                try (FileOutputStream termOut = new FileOutputStream(terminalFileDescriptorWrapped)) {
-//                    while (true) {
-//                        Log.w(EmulatorDebug.LOG_TAG, "stdin writer: reading");
-//                        int bytesToWrite = mTerminalToProcessIOQueue.read(buffer, true);
-//                        Log.w(EmulatorDebug.LOG_TAG, "stdin writer: read");
-//                        if (bytesToWrite == -1) {
-//                            Log.wtf(EmulatorDebug.LOG_TAG, "stdin writer return -1");
-//                            return;
-//                        }
-//                        Log.w(EmulatorDebug.LOG_TAG, "stdin writer: writing");
-//                        termOut.write(buffer, 0, bytesToWrite);
-//                        Log.w(EmulatorDebug.LOG_TAG, "stdin writer: wrote");
-//                    }
-//                } catch (IOException e) {
-//                    // Ignore.
-//                }
-//            }
-//        }.start();
+    /**
+     * Set the terminal emulator's window size and start terminal emulation.
+     *
+     * @param columns The number of columns in the terminal window.
+     * @param rows    The number of rows in the terminal window.
+     */
+    public void initializeEmulator(int columns, int rows) {
+        mEmulator = new TerminalEmulator(this, columns, rows, /* transcript= */5000);
+
+        if (isLogView) createLogSession(columns, rows);
+        else new Thread("TermSession") {
+            @Override
+            public void run() {
+                while(true) {
+                    createShellSession(columns, rows);
+                    int processExitCode = JNI.waitFor(mShellPid);
+                    byte[] bytesToWrite = String.format(Locale.ENGLISH, "shell returned %d\n\rrestarting...\n\r", processExitCode).getBytes(StandardCharsets.UTF_8);
+                    mEmulator.append(bytesToWrite, bytesToWrite.length);
+                    JNI.close(mTerminalFileDescriptor);
+                }
+            }
+        }.start();
+
         {
             String fmt = "emulator initialized";
             JNI.printf(fmt);
@@ -273,8 +336,7 @@ public final class TerminalSession extends TerminalOutput {
     /** Write data to the shell process. */
     @Override
     public void write(byte[] data, int offset, int count) {
-        // this is a log
-//        if (mShellPid > 0) mTerminalToProcessIOQueue.write(data, offset, count);
+        if (!isLogView) if (mShellPid > 0) mTerminalToProcessIOQueue.write(data, offset, count);
     }
 
     /** Write the Unicode code point to the terminal encoded in UTF-8. */
@@ -332,21 +394,23 @@ public final class TerminalSession extends TerminalOutput {
     /** Finish this terminal session by sending SIGKILL to the shell. */
     public void finishIfRunning() {
         if (isRunning()) {
-            // this is a log
-//            try {
-//                Os.kill(mShellPid, OsConstants.SIGKILL);
-//            } catch (ErrnoException e) {
-//                Log.w(EmulatorDebug.LOG_TAG, "failed sending SIGKILL: " + e.getMessage());
-//            }
+            if (!isLogView) {
+                try {
+                    Os.kill(mShellPid, OsConstants.SIGKILL);
+                } catch (ErrnoException e) {
+                    Log.w(EmulatorDebug.LOG_TAG, "failed sending SIGKILL: " + e.getMessage());
+                }
+            }
         }
     }
 
     /** Cleanup resources when the process exits. */
     void cleanupResources(int exitStatus) {
         synchronized (this) {
-            // this is a log
-            mShellPid = -1;
-            mShellExitStatus = exitStatus;
+            if (!isLogView) {
+                mShellPid = -1;
+                mShellExitStatus = exitStatus;
+            }
         }
 
         // Stop the reader and writer threads, and close the I/O streams

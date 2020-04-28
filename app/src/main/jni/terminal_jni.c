@@ -84,11 +84,10 @@ static int create_subprocess(JNIEnv* env,
         return throw_runtime_exception(env, "Cannot grantpt()/unlockpt()/ptsname_r() on /dev/ptmx");
     }
 
-    // Enable UTF-8 mode and disable flow control to prevent Ctrl+S from locking up the display.
+    // Enable UTF-8 mode.
     struct termios tios;
     tcgetattr(ptm, &tios);
     tios.c_iflag |= IUTF8;
-    tios.c_iflag &= ~(IXON | IXOFF);
     tcsetattr(ptm, TCSANOW, &tios);
 
     /** Set initial winsize. */
@@ -113,14 +112,9 @@ static int create_subprocess(JNIEnv* env,
         int pts = open(devname, O_RDWR);
         if (pts < 0) exit(-1);
 
-        int i = 0;
-
         dup2(pts, 0);
         dup2(pts, 1);
         dup2(pts, 2);
-
-
-        printf("test command %d\n", i++);
 
         DIR* self_dir = opendir("/proc/self/fd");
         if (self_dir != NULL) {
@@ -133,11 +127,8 @@ static int create_subprocess(JNIEnv* env,
             closedir(self_dir);
         }
 
-        printf("test command %d\n", i++);
         clearenv();
-        printf("test command %d\n", i++);
         if (envp) for (; *envp; ++envp) putenv(*envp);
-        printf("test command %d\n", i++);
 
         if (chdir(cwd) != 0) {
             char* error_message;
@@ -146,15 +137,12 @@ static int create_subprocess(JNIEnv* env,
             perror(error_message);
             fflush(stderr);
         }
-        // use argv to avoid error unused perameter
-        printf("[ not invoking exec %s %s] %d\n", cmd, argv[0], i++);
-//        execvp(cmd, argv);
-        for (int x = 10; x != 0; x--) {
-            printf("[ sleeping %d then exiting ]\n", x);
-            sleep(1);
-        }
-//        _exit(1);
-        return 0;
+        execvp(cmd, argv);
+        // Show terminal output about failing exec() call:
+        char* error_message;
+        if (asprintf(&error_message, "exec(\"%s\")", cmd) == -1) error_message = "exec()";
+        perror(error_message);
+        _exit(1);
     }
 }
 
@@ -248,11 +236,10 @@ static int create_log(JNIEnv* env,
         return throw_runtime_exception(env, "Cannot grantpt()/unlockpt()/ptsname_r() on /dev/ptmx");
     }
 
-    // Enable UTF-8 mode and disable flow control to prevent Ctrl+S from locking up the display.
+    // Enable UTF-8 mode.
     struct termios tios;
     tcgetattr(ptm, &tios);
     tios.c_iflag |= IUTF8;
-    tios.c_iflag &= ~(IXON | IXOFF);
     tcsetattr(ptm, TCSANOW, &tios);
 
     /** Set initial winsize. */
