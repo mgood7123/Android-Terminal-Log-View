@@ -49,11 +49,11 @@ final class TerminalPreferences {
         PreferenceManager.getDefaultSharedPreferences(context).edit().putString(TerminalPreferences.CURRENT_SESSION_KEY, session.mHandle).apply();
     }
 
-    public static TerminalSession getCurrentSession(TerminalActivity context) {
+    public static TerminalSession getCurrentSession(Context context, TerminalService mTermService) {
         String sessionHandle = PreferenceManager.getDefaultSharedPreferences(context).getString(TerminalPreferences.CURRENT_SESSION_KEY, "");
 
-        for (int i = 0, len = context.mTermService.getSessions().size(); i < len; i++) {
-            TerminalSession session = context.mTermService.getSessions().get(i);
+        for (int i = 0, len = mTermService.getSessions().size(); i < len; i++) {
+            TerminalSession session = mTermService.getSessions().get(i);
             if (session.mHandle.equals(sessionHandle)) return session;
         }
 

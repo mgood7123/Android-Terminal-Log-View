@@ -247,7 +247,6 @@ public class TerminalService extends Service implements SessionChangedCallback {
         TerminalSession session = new TerminalSession(false, "/bin/sh", processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this);
         mTerminalSessions.add(session);
         updateNotification();
-
         return session;
     }
 

@@ -20,6 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 package alpine.term;
 
 import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.content.Context;
 import android.media.AudioManager;
 import android.view.Gravity;
@@ -40,20 +41,22 @@ import alpine.term.terminal_view.TerminalViewClient;
 @SuppressWarnings("WeakerAccess")
 public final class InputDispatcher implements TerminalViewClient {
 
-    private final TerminalActivity mActivity;
+    private final Context context;
 
     /** Keeping track of the special keys acting as Ctrl and Fn for the soft keyboard and other hardware keys. */
     private boolean mVirtualControlKeyDown, mVirtualFnKeyDown;
+    private TerminalController terminalController;
 
-    public InputDispatcher(TerminalActivity activity) {
-        this.mActivity = activity;
+    public InputDispatcher(Context context, TerminalController terminalController) {
+        this.context = context;
+        this.terminalController = terminalController;
     }
 
     @Override
     public float onScale(float scale) {
         if (scale < 0.9f || scale > 1.1f) {
             boolean increase = scale > 1.f;
-            mActivity.changeFontSize(increase);
+            terminalController.changeFontSize(increase);
             return 1.0f;
         }
 
@@ -63,10 +66,10 @@ public final class InputDispatcher implements TerminalViewClient {
     @Override
     public void onSingleTapUp(MotionEvent e) {
         // do nothing if this is attached to a log view
-        if (!mActivity.mTerminalView.isLogView) {
-            InputMethodManager mgr = (InputMethodManager) mActivity.getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (!terminalController.mTerminalView.isLogView) {
+            InputMethodManager mgr = (InputMethodManager) context.getSystemService(Context.INPUT_METHOD_SERVICE);
             if (mgr != null)
-                mgr.showSoftInput(mActivity.mTerminalView, InputMethodManager.SHOW_IMPLICIT);
+                mgr.showSoftInput(terminalController.mTerminalView, InputMethodManager.SHOW_IMPLICIT);
         }
     }
 
@@ -84,28 +87,28 @@ public final class InputDispatcher implements TerminalViewClient {
             int unicodeChar = e.getUnicodeChar(0);
 
             if (keyCode == KeyEvent.KEYCODE_DPAD_DOWN || unicodeChar == 'n'/* next */) {
-                mActivity.switchToSession(true);
+                terminalController.switchToSession(true);
             } else if (keyCode == KeyEvent.KEYCODE_DPAD_UP || unicodeChar == 'p' /* previous */) {
-                mActivity.switchToSession(false);
+                terminalController.switchToSession(false);
             } else if (unicodeChar == 'k'/* keyboard */) {
-                InputMethodManager imm = (InputMethodManager) mActivity.getSystemService(Context.INPUT_METHOD_SERVICE);
+                InputMethodManager imm = (InputMethodManager) context.getSystemService(Context.INPUT_METHOD_SERVICE);
                 if (imm != null) imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0);
             } else if (unicodeChar == 'm'/* menu */) {
-                mActivity.mTerminalView.showContextMenu();
+                terminalController.mTerminalView.showContextMenu();
             } else if (unicodeChar == 'u' /* urls */) {
-                mActivity.showUrlSelection();
+                terminalController.showUrlSelection();
             } else if (unicodeChar == 'v') {
-                mActivity.doPaste();
+                terminalController.doPaste();
             } else if (unicodeChar == '+' || e.getUnicodeChar(KeyEvent.META_SHIFT_ON) == '+') {
                 // We also check for the shifted char here since shift may be required to produce '+',
                 // see https://github.com/termux/termux-api/issues/2
-                mActivity.changeFontSize(true);
+                terminalController.changeFontSize(true);
             } else if (unicodeChar == '-') {
-                mActivity.changeFontSize(false);
+                terminalController.changeFontSize(false);
             } else if (unicodeChar >= '1' && unicodeChar <= '5') {
                 int num = unicodeChar - '1';
-                TerminalService service = mActivity.mTermService;
-                if (service.getSessions().size() > num) mActivity.switchToSession(service.getSessions().get(num));
+                TerminalService service = terminalController.mTermService;
+                if (service.getSessions().size() > num) terminalController.switchToSession(service.getSessions().get(num));
             }
 
             return true;
@@ -121,12 +124,12 @@ public final class InputDispatcher implements TerminalViewClient {
 
     @Override
     public boolean readControlKey() {
-        return (mActivity.mExtraKeysView != null && mActivity.mExtraKeysView.readControlButton()) || mVirtualControlKeyDown;
+        return (terminalController.mExtraKeysView != null && terminalController.mExtraKeysView.readControlButton()) || mVirtualControlKeyDown;
     }
 
     @Override
     public boolean readAltKey() {
-        return (mActivity.mExtraKeysView != null && mActivity.mExtraKeysView.readAltButton());
+        return (terminalController.mExtraKeysView != null && terminalController.mExtraKeysView.readAltButton());
     }
 
     @Override
@@ -214,14 +217,14 @@ public final class InputDispatcher implements TerminalViewClient {
                 // Volume control.
                 case 'v':
                     resultingCodePoint = -1;
-                    AudioManager audio = (AudioManager) mActivity.getSystemService(Context.AUDIO_SERVICE);
+                    AudioManager audio = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
                     if (audio != null) audio.adjustSuggestedStreamVolume(AudioManager.ADJUST_SAME, AudioManager.USE_DEFAULT_STREAM_TYPE, AudioManager.FLAG_SHOW_UI);
                     break;
 
                 // Writing mode:
                 case 'k':
                 case 'q':
-                    mActivity.toggleShowExtraKeys();
+                    terminalController.toggleShowExtraKeys();
                     break;
             }
 
