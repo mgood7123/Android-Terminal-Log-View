@@ -59,8 +59,6 @@ import android.widget.Scroller;
 
 import alpine.term.Config;
 import alpine.term.R;
-import alpine.term.emulator.EmulatorDebug;
-import alpine.term.emulator.JNI;
 import alpine.term.emulator.KeyHandler;
 import alpine.term.emulator.TerminalBuffer;
 import alpine.term.emulator.TerminalEmulator;
@@ -74,7 +72,7 @@ public final class TerminalView extends View {
     private static final boolean LOG_KEY_EVENTS = false;
 
     /** The currently displayed terminal session, whose emulator is {@link #mEmulator}. */
-    private TerminalSession mTermSession;
+    private TerminalSession mTermSession = null;
 
     /** Our terminal emulator whose session is {@link #mTermSession}. */
     private TerminalEmulator mEmulator;
@@ -754,7 +752,7 @@ public final class TerminalView extends View {
         int newRows = Math.max(4, (viewHeight - mRenderer.mFontLineSpacingAndAscent) / mRenderer.mFontLineSpacing);
 
         if (mEmulator == null || (newColumns != mEmulator.mColumns || newRows != mEmulator.mRows)) {
-            mTermSession.updateSize(newColumns, newRows);
+            mTermSession.updateSize(newColumns, newRows, getContext());
             mEmulator = mTermSession.getEmulator();
 
             mTopRow = 0;

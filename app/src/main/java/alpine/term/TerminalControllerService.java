@@ -15,7 +15,6 @@ import android.text.TextUtils;
 import android.text.style.StyleSpan;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.WindowManager;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
@@ -26,8 +25,6 @@ import java.util.Locale;
 
 import alpine.term.emulator.JNI;
 import alpine.term.emulator.TerminalSession;
-
-import static android.os.SystemClock.sleep;
 
 public class TerminalControllerService implements ServiceConnection {
 
@@ -75,6 +72,7 @@ public class TerminalControllerService implements ServiceConnection {
 
                     terminalController.mTermService.terminateService();
                 } else {
+                    terminalController.switchToPreviousSession();
                     terminalController.mTermService.removeSession(finishedSession);
                 }
             }
@@ -191,13 +189,16 @@ public class TerminalControllerService implements ServiceConnection {
 
         listView.setOnItemClickListener((parent, view, position, id) -> {
             TerminalSession clickedSession = mListViewAdapter.getItem(position);
-            terminalController.switchToSession(clickedSession);
+            TerminalSession currentSession = terminalController.mTerminalView.getCurrentSession();
+            terminalController.switchToSession(currentSession, clickedSession);
             terminalController.getDrawer().closeDrawers();
         });
 
         if (terminalController.mTermService.getSessions().isEmpty()) {
             if (terminalController.mIsVisible) {
-                createLog();
+                TerminalSession log = createLog();
+                createLogcat();
+                terminalController.switchToSession(log);
             } else {
                 // The service connected while not in foreground - just bail out.
                 terminalController.activity.finish();
@@ -222,6 +223,7 @@ public class TerminalControllerService implements ServiceConnection {
     public TerminalSession createLog() {
         if (terminalController.mTermService == null) return null;
         TerminalSession session;
+        TerminalSession currentSession = terminalController.mTerminalView.getCurrentSession();
 
         session = terminalController.mTermService.createShellSession(true);
         terminalController.mTerminalView.attachSession(session);
@@ -231,7 +233,25 @@ public class TerminalControllerService implements ServiceConnection {
         session.mSessionName = "LOG [pid=" + logPid + "]";
         JNI.puts(String.format(Locale.ENGLISH, "log has started, pid is %d", logPid));
 
-        terminalController.switchToSession(session);
+        terminalController.switchToSession(currentSession, session);
+        mListViewAdapter.notifyDataSetChanged();
+        return session;
+    }
+
+    public TerminalSession createLogcat() {
+        if (terminalController.mTermService == null) return null;
+        TerminalSession session;
+        TerminalSession currentSession = terminalController.mTerminalView.getCurrentSession();
+
+        session = terminalController.mTermService.createLogcatSession();
+        terminalController.mTerminalView.attachSession(session);
+
+        int logPid;
+        logPid = session.getPid();
+        session.mSessionName = "logcat -C --pid=" + JNI.getPid() + " [pid=" + logPid + "]";
+        JNI.puts(String.format(Locale.ENGLISH, "logcat has started, pid is %d", logPid));
+
+        terminalController.switchToSession(currentSession, session);
         mListViewAdapter.notifyDataSetChanged();
         return session;
     }
@@ -239,6 +259,7 @@ public class TerminalControllerService implements ServiceConnection {
     public TerminalSession createShell() {
         if (terminalController.mTermService == null) return null;
         TerminalSession session;
+        TerminalSession currentSession = terminalController.mTerminalView.getCurrentSession();
 
         session = terminalController.mTermService.createShellSession(false);
         terminalController.mTerminalView.attachSession(session);
@@ -248,7 +269,7 @@ public class TerminalControllerService implements ServiceConnection {
         session.mSessionName = "SHELL [pid=" + shellPid + "]";
         JNI.puts(String.format(Locale.ENGLISH, "shell has started, pid is %d", shellPid));
 
-        terminalController.switchToSession(session);
+        terminalController.switchToSession(currentSession, session);
         mListViewAdapter.notifyDataSetChanged();
         return session;
     }

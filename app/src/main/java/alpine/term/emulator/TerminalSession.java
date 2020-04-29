@@ -23,24 +23,27 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 package alpine.term.emulator;
 
 import android.annotation.SuppressLint;
+import android.content.Context;
 import android.os.Handler;
 import android.os.Message;
-import android.os.SystemClock;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.system.OsConstants;
 import android.util.Log;
 
+import java.io.File;
 import java.io.FileDescriptor;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.UUID;
+
+import alpine.term.Config;
 
 /**
  * A terminal session, consisting of a process coupled to a terminal interface.
@@ -179,9 +182,9 @@ public final class TerminalSession extends TerminalOutput {
     }
 
     /** Inform the attached pty of the new size and reflow or initialize the emulator. */
-    public void updateSize(int columns, int rows) {
+    public void updateSize(int columns, int rows, Context context) {
         if (mEmulator == null) {
-            initializeEmulator(columns, rows);
+            initializeEmulator(columns, rows, context);
         } else {
             JNI.setPtyWindowSize(mTerminalFileDescriptor, rows, columns);
             mEmulator.resize(columns, rows);
@@ -193,6 +196,22 @@ public final class TerminalSession extends TerminalOutput {
         return (mEmulator == null) ? null : mEmulator.getTitle();
     }
 
+    void start_STDIN_writer(FileDescriptor terminalFileDescriptorWrapped) {
+        final byte[] buffer = new byte[4096];
+        try (FileOutputStream termOut = new FileOutputStream(terminalFileDescriptorWrapped)) {
+            while (true) {
+                int bytesToWrite = mTerminalToProcessIOQueue.read(buffer, true);
+                if (bytesToWrite == -1) {
+                    Log.wtf(EmulatorDebug.LOG_TAG, "stdin writer return -1");
+                    return;
+                }
+                termOut.write(buffer, 0, bytesToWrite);
+            }
+        } catch (IOException e) {
+            // Ignore.
+        }
+    }
+    
     public void createShellSession(int columns, int rows) {
         Log.w(EmulatorDebug.LOG_TAG, "creating shell");
         int[] processId = new int[1];
@@ -202,30 +221,21 @@ public final class TerminalSession extends TerminalOutput {
 
         final FileDescriptor terminalFileDescriptorWrapped = wrapFileDescriptor(mTerminalFileDescriptor);
 
-        new Thread("TermSessionInputReader[pid=" + mShellPid + "]") {
+        new Thread("TermSessionInputReader (stdout/stderr) [pid=" + mShellPid + "]") {
             @Override
             public void run() {
-                {
-                    String fmt = "starting stdout/stderr reader";
-                    JNI.puts(fmt);
-                    Log.w(EmulatorDebug.LOG_TAG, fmt);
-                }
                 try (InputStream termIn = new FileInputStream(terminalFileDescriptorWrapped)) {
                     final byte[] buffer = new byte[4096];
                     while (true) {
-                        Log.w(EmulatorDebug.LOG_TAG, "stdout/stderr reader: reading");
                         int read = termIn.read(buffer);
-                        Log.w(EmulatorDebug.LOG_TAG, "stdout/stderr reader: read");
                         if (read == -1) {
                             Log.wtf(EmulatorDebug.LOG_TAG, "stdout/stderr reader return -1");
                             return;
                         }
-                        Log.w(EmulatorDebug.LOG_TAG, "stdout/stderr reader: writing");
                         if (!mProcessToTerminalIOQueue.write(buffer, 0, read)) {
                             Log.wtf(EmulatorDebug.LOG_TAG, "stdout/stderr reader [write] returned false (closed)");
                             return;
                         }
-                        Log.w(EmulatorDebug.LOG_TAG, "stdout/stderr reader: wrote");
                         mMainThreadHandler.sendEmptyMessage(MSG_NEW_INPUT);
                     }
                 } catch (Exception e) {
@@ -234,36 +244,15 @@ public final class TerminalSession extends TerminalOutput {
             }
         }.start();
 
-        new Thread("TermSessionOutputWriter[pid=" + mShellPid + "]") {
+        new Thread("TermSessionOutputWriter (stdin) [pid=" + mShellPid + "]") {
             @Override
             public void run() {
-                {
-                    String fmt = "starting stdin writer";
-                    JNI.puts(fmt);
-                    Log.w(EmulatorDebug.LOG_TAG, fmt);
-                }
-                final byte[] buffer = new byte[4096];
-                try (FileOutputStream termOut = new FileOutputStream(terminalFileDescriptorWrapped)) {
-                    while (true) {
-                        Log.w(EmulatorDebug.LOG_TAG, "stdin writer: reading");
-                        int bytesToWrite = mTerminalToProcessIOQueue.read(buffer, true);
-                        Log.w(EmulatorDebug.LOG_TAG, "stdin writer: read");
-                        if (bytesToWrite == -1) {
-                            Log.wtf(EmulatorDebug.LOG_TAG, "stdin writer return -1");
-                            return;
-                        }
-                        Log.w(EmulatorDebug.LOG_TAG, "stdin writer: writing");
-                        termOut.write(buffer, 0, bytesToWrite);
-                        Log.w(EmulatorDebug.LOG_TAG, "stdin writer: wrote");
-                    }
-                } catch (IOException e) {
-                    // Ignore.
-                }
+                start_STDIN_writer(terminalFileDescriptorWrapped);
             }
         }.start();
     }
 
-    public void createLogSession(int columns, int rows) {
+    public void createLogSession(int columns, int rows, Context context) {
         Log.w(EmulatorDebug.LOG_TAG, "creating log");
         int[] processId = new int[1];
         mTerminalFileDescriptor = JNI.createLog(mShellPath, mCwd, mArgs, mEnv, processId, rows, columns);
@@ -273,30 +262,72 @@ public final class TerminalSession extends TerminalOutput {
 
         final FileDescriptor terminalFileDescriptorWrapped = wrapFileDescriptor(mTerminalFileDescriptor);
 
-        new Thread("TermSessionInputReader[log (pid=" + mShellPid + ")]") {
+        new Thread("TermSessionInputReader (stdout/stderr) [log (pid=" + mShellPid + ")]") {
             @Override
             public void run() {
-                {
-                    String fmt = "starting stdout/stderr reader";
-                    JNI.puts(fmt);
-                    Log.w(EmulatorDebug.LOG_TAG, fmt);
-                }
                 try (InputStream termIn = new FileInputStream(terminalFileDescriptorWrapped)) {
                     final byte[] buffer = new byte[4096];
+                    File log = new File(Config.getDataDirectory(context) + "/NATIVE_LOG.txt");
+                    if (!log.exists()) log.createNewFile();
+                    if (!log.canRead()) log.setReadable(true);
+                    if (!log.canWrite()) log.setWritable(true);
+                    FileOutputStream logFile = new FileOutputStream(log);
+                    FileDescriptor logFileFileDescriptor = logFile.getFD();
                     while (true) {
-                        Log.w(EmulatorDebug.LOG_TAG, "stdout/stderr reader: reading");
                         int read = termIn.read(buffer);
-                        Log.w(EmulatorDebug.LOG_TAG, "stdout/stderr reader: read");
                         if (read == -1) {
                             Log.wtf(EmulatorDebug.LOG_TAG, "stdout/stderr reader return -1");
                             return;
                         }
-                        Log.w(EmulatorDebug.LOG_TAG, "stdout/stderr reader: writing");
+                        logFile.write(buffer, 0, read);
+                        logFileFileDescriptor.sync();
                         if (!mProcessToTerminalIOQueue.write(buffer, 0, read)) {
                             Log.wtf(EmulatorDebug.LOG_TAG, "stdout/stderr reader [write] returned false (closed)");
                             return;
                         }
-                        Log.w(EmulatorDebug.LOG_TAG, "stdout/stderr reader: wrote");
+                        mMainThreadHandler.sendEmptyMessage(MSG_NEW_INPUT);
+                    }
+                } catch (Exception e) {
+                    // Ignore, just shutting down.
+                }
+            }
+        }.start();
+    }
+
+    public void createLogcatSession(int columns, int rows, Context context) {
+        mEmulator.resize(80, 80);
+        Log.w(EmulatorDebug.LOG_TAG, "creating Logcat");
+        int[] processId = new int[1];
+        mTerminalFileDescriptor = JNI.createSubprocess(mShellPath, mCwd, mArgs, mEnv, processId, rows, columns);
+        mShellPid = processId[0];
+        JNI.puts("created Logcat");
+        Log.w(EmulatorDebug.LOG_TAG, "created Logcat");
+
+        final FileDescriptor terminalFileDescriptorWrapped = wrapFileDescriptor(mTerminalFileDescriptor);
+
+        new Thread("TermSessionInputReader (stdout/stderr) [Logcat (pid=" + mShellPid + ")]") {
+            @Override
+            public void run() {
+                try (InputStream termIn = new FileInputStream(terminalFileDescriptorWrapped)) {
+                    final byte[] buffer = new byte[4096];
+                    File log = new File(Config.getDataDirectory(context) + "/LOGCAT.txt");
+                    if (!log.exists()) log.createNewFile();
+                    if (!log.canRead()) log.setReadable(true);
+                    if (!log.canWrite()) log.setWritable(true);
+                    FileOutputStream logFile = new FileOutputStream(log);
+                    FileDescriptor logFileFileDescriptor = logFile.getFD();
+                    while (true) {
+                        int read = termIn.read(buffer);
+                        if (read == -1) {
+                            Log.wtf(EmulatorDebug.LOG_TAG, "stdout/stderr reader return -1");
+                            return;
+                        }
+                        logFile.write(buffer, 0, read);
+                        logFileFileDescriptor.sync();
+                        if (!mProcessToTerminalIOQueue.write(buffer, 0, read)) {
+                            Log.wtf(EmulatorDebug.LOG_TAG, "stdout/stderr reader [write] returned false (closed)");
+                            return;
+                        }
                         mMainThreadHandler.sendEmptyMessage(MSG_NEW_INPUT);
                     }
                 } catch (Exception e) {
@@ -314,11 +345,26 @@ public final class TerminalSession extends TerminalOutput {
      * @param columns The number of columns in the terminal window.
      * @param rows    The number of rows in the terminal window.
      */
-    public void initializeEmulator(int columns, int rows) {
+    public void initializeEmulator(int columns, int rows, Context context) {
         mEmulator = new TerminalEmulator(this, columns, rows, /* transcript= */5000);
 
         if (isLogView) {
-            createLogSession(columns, rows);
+            if (mShellPath.contentEquals("/bin/logcat")) {
+                createLogcatSession(columns, rows, context);
+                new Thread("TermSession[pid=" + mShellPid + "]") {
+                    @Override
+                    public void run() {
+                        while (true) {
+                            int processExitCode = JNI.waitFor(mShellPid);
+                            byte[] bytesToWrite = String.format(Locale.ENGLISH, "Logcat returned %d\n\rrestarting...\n\r", processExitCode).getBytes(StandardCharsets.UTF_8);
+                            mEmulator.append(bytesToWrite, bytesToWrite.length);
+                            createLogcatSession(columns, rows, context);
+                        }
+                    }
+                }.start();
+            } else {
+                createLogSession(columns, rows, context);
+            }
         } else {
             createShellSession(columns, rows);
             new Thread("TermSession[pid=" + mShellPid + "]") {

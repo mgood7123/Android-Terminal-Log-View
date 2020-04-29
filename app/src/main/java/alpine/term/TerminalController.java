@@ -19,7 +19,6 @@ import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.InputMethodManager;
-import android.widget.AbsListView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
@@ -447,28 +446,52 @@ public class TerminalController {
     }
 
     /**
-     * Try switching to session and note about it, but do nothing if already displaying the session.
+     * switch to session and note about it
      */
     public void switchToSession(TerminalSession session) {
         terminalControllerService.mListViewAdapter.notifyDataSetChanged();
-        if (mTerminalView.attachSession(session)) {
-            if (mIsVisible) {
-                final int indexOfSession = mTermService.getSessions().indexOf(session);
+        mTerminalView.attachSession(session);
+        if (mIsVisible) {
+            final int indexOfSession = mTermService.getSessions().indexOf(session);
 
-                leftDrawerList.setItemChecked(indexOfSession, true);
-                leftDrawerList.smoothScrollToPosition(indexOfSession);
+            leftDrawerList.setItemChecked(indexOfSession, true);
+            leftDrawerList.smoothScrollToPosition(indexOfSession);
 
-                if (session.isShell()) {
-                    if (mSettings.isExtraKeysEnabled()) viewPager.setVisibility(View.VISIBLE);
-                } else {
-                    if (mSettings.isExtraKeysEnabled()) viewPager.setVisibility(View.INVISIBLE);
-                }
-
-                showToast(toToastTitle(session), false);
+            if (session.isShell()) {
+                if (mSettings.isExtraKeysEnabled()) viewPager.setVisibility(View.VISIBLE);
+            } else {
+                if (mSettings.isExtraKeysEnabled()) viewPager.setVisibility(View.GONE);
             }
 
-            updateBackgroundColor();
+            showToast(toToastTitle(session), false);
         }
+
+        updateBackgroundColor();
+    }
+
+    TerminalSession previousSession = null;
+
+    /**
+     * Try switching to session and note about it, but do not note if already displaying the session
+     */
+
+    public void switchToSession(TerminalSession currentSession, TerminalSession targetSession) {
+        Log.d(Config.APP_LOG_TAG, "current session = " + currentSession);
+        Log.d(Config.APP_LOG_TAG, "target session = " + targetSession);
+        if (currentSession == null) switchToSession(targetSession);
+        else {
+            if (!(currentSession.getPid() == targetSession.getPid())) {
+                previousSession = currentSession;
+                switchToSession(targetSession);
+            }
+        }
+    }
+
+    /**
+     * Switch to previous session
+     */
+    public void switchToPreviousSession() {
+        switchToSession(previousSession);
     }
 
     /**

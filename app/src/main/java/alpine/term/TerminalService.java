@@ -20,7 +20,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 package alpine.term;
 
 import android.annotation.SuppressLint;
-import android.app.ActivityManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -37,12 +36,11 @@ import android.util.Log;
 import android.widget.ArrayAdapter;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 
 import androidx.core.app.NotificationCompat;
 
+import alpine.term.emulator.JNI;
 import alpine.term.emulator.TerminalSession;
 import alpine.term.emulator.TerminalSession.SessionChangedCallback;
 
@@ -250,6 +248,38 @@ public class TerminalService extends Service implements SessionChangedCallback {
         Log.i(Config.APP_LOG_TAG, "initiating sh session with following arguments: " + processArgs.toString());
 
         TerminalSession session = new TerminalSession(isLogView, "/bin/sh", processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this);
+        mTerminalSessions.add(session);
+        updateNotification();
+        return session;
+    }
+
+    /**
+     * Creates terminal instance with running 'Logcat'.
+     * @return              a created terminal session that can be attached to TerminalView.
+     */
+    public TerminalSession createLogcatSession() {
+        ArrayList<String> environment = new ArrayList<>();
+        Context appContext = getApplicationContext();
+
+        String execPath = appContext.getApplicationInfo().nativeLibraryDir;
+        String runtimeDataPath = Config.getDataDirectory(appContext);
+
+        environment.add("ANDROID_ROOT=" + System.getenv("ANDROID_ROOT"));
+        environment.add("ANDROID_DATA=" + System.getenv("ANDROID_DATA"));
+        environment.add("PREFIX=" + runtimeDataPath);
+        environment.add("LANG=en_US.UTF-8");
+        environment.add("HOME=" + runtimeDataPath);
+        environment.add("PATH=" + System.getenv("PATH"));
+        environment.add("TMPDIR=" + Config.getTemporaryDirectory(appContext));
+
+        ArrayList<String> processArgs = new ArrayList<>();
+        processArgs.add("/bin/logcat");
+        processArgs.add("-C");
+        processArgs.add("--pid=" + JNI.getPid());
+
+        Log.i(Config.APP_LOG_TAG, "initiating sh session with following arguments: " + processArgs.toString());
+
+        TerminalSession session = new TerminalSession(true, "/bin/logcat", processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this);
         mTerminalSessions.add(session);
         updateNotification();
         return session;

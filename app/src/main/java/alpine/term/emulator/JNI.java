@@ -64,4 +64,6 @@ public final class JNI {
 
     public static native void test_puts();
     public static native void puts(String fmt);
+
+    public static native int getPid();
 }

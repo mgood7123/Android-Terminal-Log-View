@@ -40,7 +40,8 @@ final class TerminalPreferences {
 
     public TerminalPreferences(Context context) {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
-        mShowExtraKeys = prefs.getBoolean(SHOW_EXTRA_KEYS_KEY, true);
+        // since the first session is a NOT a shell session we set this to a default of false
+        mShowExtraKeys = prefs.getBoolean(SHOW_EXTRA_KEYS_KEY, false);
         mIgnoreBellCharacter = prefs.getBoolean(IGNORE_BELL, false);
         mColorScheme = prefs.getString(COLOR_SCHEME, "Default");
     }

@@ -397,3 +397,8 @@ JNIEXPORT void JNICALL Java_alpine_term_emulator_JNI_puts(JNIEnv * ALPINE_TERM_U
     printf("%s\n", fmt_utf8);
     (*env)->ReleaseStringUTFChars(env, fmt, fmt_utf8);
 }
+
+JNIEXPORT jint JNICALL
+Java_alpine_term_emulator_JNI_getPid(JNIEnv *ALPINE_TERM_UNUSED(env), jclass ALPINE_TERM_UNUSED(clazz)) {
+    return getpid();
+}

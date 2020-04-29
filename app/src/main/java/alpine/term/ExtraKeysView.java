@@ -34,11 +34,8 @@ import android.widget.GridLayout;
 import android.widget.PopupWindow;
 import android.widget.ToggleButton;
 
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
-import alpine.term.emulator.TerminalSession;
 import alpine.term.terminal_view.TerminalView;
 
 /**
