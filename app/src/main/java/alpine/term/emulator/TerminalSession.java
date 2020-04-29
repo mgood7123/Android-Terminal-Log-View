@@ -267,7 +267,7 @@ public final class TerminalSession extends TerminalOutput {
             public void run() {
                 try (InputStream termIn = new FileInputStream(terminalFileDescriptorWrapped)) {
                     final byte[] buffer = new byte[4096];
-                    File log = new File(Config.getDataDirectory(context) + "/NATIVE_LOG.txt");
+                    File log = new File(Config.getDataDirectory(context) + "/native_log.txt");
                     if (!log.exists()) log.createNewFile();
                     if (!log.canRead()) log.setReadable(true);
                     if (!log.canWrite()) log.setWritable(true);
@@ -310,7 +310,7 @@ public final class TerminalSession extends TerminalOutput {
             public void run() {
                 try (InputStream termIn = new FileInputStream(terminalFileDescriptorWrapped)) {
                     final byte[] buffer = new byte[4096];
-                    File log = new File(Config.getDataDirectory(context) + "/LOGCAT.txt");
+                    File log = new File(Config.getDataDirectory(context) + "/logcat.txt");
                     if (!log.exists()) log.createNewFile();
                     if (!log.canRead()) log.setReadable(true);
                     if (!log.canWrite()) log.setWritable(true);
