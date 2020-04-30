@@ -44,7 +44,6 @@ import java.util.Locale;
 import java.util.UUID;
 
 import alpine.term.Config;
-import alpine.term.TrackedActivity;
 
 /**
  * A terminal session, consisting of a process coupled to a terminal interface.
@@ -171,12 +170,10 @@ public final class TerminalSession extends TerminalOutput {
     private final String[] mEnv;
     private final String mCwd;
     private final boolean isLogView;
-    private final TrackedActivity activity;
 
-    public TerminalSession(boolean isLogView, String shellPath, String[] args, String[] env, String cwd, SessionChangedCallback changeCallback, TrackedActivity activity) {
+    public TerminalSession(boolean isLogView, String shellPath, String[] args, String[] env, String cwd, SessionChangedCallback changeCallback) {
         mChangeCallback = changeCallback;
 
-        this.activity = activity;
         this.isLogView = isLogView;
         this.mShellPath = shellPath;
         this.mArgs = args;
@@ -256,11 +253,9 @@ public final class TerminalSession extends TerminalOutput {
     }
 
     public void createLogSession(int columns, int rows, Context context) {
-        int pid = -1;
-        if (activity != null) pid = activity.pid;
         Log.w(EmulatorDebug.LOG_TAG, "creating log");
         int[] processId = new int[1];
-        mTerminalFileDescriptor = JNI.createLog(mShellPath, mCwd, mArgs, mEnv, processId, rows, columns, pid);
+        mTerminalFileDescriptor = JNI.createLog(mShellPath, mCwd, mArgs, mEnv, processId, rows, columns);
         mShellPid = processId[0];
         JNI.puts("created log");
         Log.w(EmulatorDebug.LOG_TAG, "created log");

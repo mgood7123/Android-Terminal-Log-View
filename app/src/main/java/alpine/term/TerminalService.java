@@ -27,20 +27,11 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.ActivityInfo;
 import android.net.wifi.WifiManager;
 import android.os.Binder;
 import android.os.Build;
-import android.os.Bundle;
-import android.os.Handler;
-import android.os.HandlerThread;
 import android.os.IBinder;
-import android.os.Looper;
-import android.os.Message;
-import android.os.Messenger;
-import android.os.Parcelable;
 import android.os.PowerManager;
-import android.os.RemoteException;
 import android.util.Log;
 import android.widget.ArrayAdapter;
 
@@ -48,11 +39,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 import androidx.core.app.NotificationCompat;
+
 import alpine.term.emulator.JNI;
 import alpine.term.emulator.TerminalSession;
 import alpine.term.emulator.TerminalSession.SessionChangedCallback;
-
-import static android.content.Intent.FLAG_ACTIVITY_NEW_TASK;
 
 /**
  * A service holding a list of terminal sessions, {@link #mTerminalSessions}, showing a foreground notification while
@@ -75,51 +65,15 @@ public class TerminalService extends Service implements SessionChangedCallback {
     private static final int NOTIFICATION_ID = 1338;
     private static final String NOTIFICATION_CHANNEL_ID = "alpine.term.NOTIFICATION_CHANNEL";
 
-    /** Keeps track of all current registered clients. */
-    ArrayList<Messenger> mClients = new ArrayList<Messenger>();
-
-    /**
-     * Command to the service to register a client, receiving callbacks
-     * from the service.  The Message's replyTo field must be a Messenger of
-     * the client where callbacks should be sent.
-     */
-    static final int MSG_REGISTER_CLIENT = 1;
-    static final int MSG_REGISTERED_CLIENT = 2;
-
-    /**
-     * Command to the service to unregister a client, ot stop receiving callbacks
-     * from the service.  The Message's replyTo field must be a Messenger of
-     * the client as previously given with MSG_REGISTER_CLIENT.
-     */
-
-    static final int MSG_UNREGISTER_CLIENT = 3;
-    static final int MSG_UNREGISTERED_CLIENT = 4;
-
-    public static final int MSG_REGISTER_ACTIVITY = 5;
-    static final int MSG_REGISTERED_ACTIVITY = 6;
-    static final int MSG_REGISTER_ACTIVITY_FAILED = 7;
-    public static final int MSG_START_TERMINAL_ACTIVITY = 8;
-    static final int MSG_STARTED_TERMINAL_ACTIVITY = 9;
-
-    static final int MSG_CALLBACK_INVOKED = 100;
-    static final int MSG_IS_SERVER_ALIVE = 1300;
-    static final int MSG_NO_REPLY = 999;
-
     /**
      * The terminal sessions which this service manages.
      * <p/>
-     * Note that this list is observed by {@link TerminalControllerService#mListViewAdapter}, so any changes must be made on the UI
+     * Note that this list is observed by {@link TerminalActivity#mListViewAdapter}, so any changes must be made on the UI
      * thread and followed by a call to {@link ArrayAdapter#notifyDataSetChanged()} }.
      */
     private final List<TerminalSession> mTerminalSessions = new ArrayList<>();
 
-    /**
-     * The terminal sessions which this service manages.
-     * <p/>
-     * Note that this list is observed by {@link TerminalControllerService#mListViewAdapter}, so any changes must be made on the UI
-     * thread and followed by a call to {@link ArrayAdapter#notifyDataSetChanged()} }.
-     */
-    final List<TrackedActivity> mTrackedActivities = new ArrayList<>();
+    private final IBinder mBinder = new LocalBinder();
 
     /**
      * Note that the service may often outlive the activity, so need to clear this reference.
@@ -163,135 +117,9 @@ public class TerminalService extends Service implements SessionChangedCallback {
         }
     }
 
-    public void waitForClientToReply() {
-        Log.e(Config.APP_LOG_TAG, "CLIENT: waiting for reply");
-        synchronized (waitOnMe) {
-            try {
-                waitOnMe.wait();
-            } catch (InterruptedException e) {
-                // we should have gotten our answer now.
-            }
-        }
-        Log.e(Config.APP_LOG_TAG, "CLIENT: replied");
-    }
-
-    @SuppressWarnings({"PointlessBooleanExpression"})
-    public static int toInt(boolean value) {
-        if (value == true) return 0;
-        return 1;
-    }
-
-    @SuppressWarnings("RedundantIfStatement")
-    public static boolean toBoolean(int value) {
-        if (value == 0) return true;
-        return false;
-    }
-
-    // available for all threads somehow
-    final Object waitOnMe = new Object();
-
-    final TerminalService terminalService = this;
-
-    HandlerThread ht = new HandlerThread("threadName");
-    Looper looper;
-    Handler handler;
-    Handler.Callback callback = new Handler.Callback() {
-
-        @SuppressWarnings("DuplicateBranchesInSwitch")
-        @Override
-        public boolean handleMessage(Message msg) {
-            Log.e(Config.APP_LOG_TAG, "SERVER: received message");
-            switch (msg.what) {
-                case MSG_REGISTER_CLIENT:
-                    mClients.add(msg.replyTo);
-                    Log.e(Config.APP_LOG_TAG, "SERVER: registered client");
-                    Log.e(Config.APP_LOG_TAG, "SERVER: informing client of registration");
-                    sendMessage(msg, MSG_REGISTERED_CLIENT);
-                    new Thread() {
-                        @Override
-                        public void run() {
-                            waitForClientToReply();
-                            Log.e(Config.APP_LOG_TAG, "SERVER: informed client of registration");
-                        }
-                    }.start();
-                    break;
-                case MSG_UNREGISTER_CLIENT:
-                    Log.e(Config.APP_LOG_TAG, "SERVER: unregistering client");
-                    sendMessage(msg, MSG_UNREGISTERED_CLIENT);
-                    new Thread() {
-                        @Override
-                        public void run() {
-                            waitForClientToReply();
-                            mClients.remove(msg.replyTo);
-                            Log.e(Config.APP_LOG_TAG, "SERVER: unregistered client");
-                        }
-                    }.start();
-                    break;
-                case MSG_IS_SERVER_ALIVE:
-                    Log.e(Config.APP_LOG_TAG, "SERVER IS ALIVE");
-                    sendMessage(msg, MSG_IS_SERVER_ALIVE);
-                    break;
-                case MSG_REGISTER_ACTIVITY:
-                    Bundle bundle = msg.getData();
-                    bundle.setClassLoader(getClass().getClassLoader());
-                    TrackedActivity trackedActivity = bundle.getParcelable("ACTIVITY");
-                    if (trackedActivity == null) {
-                        Log.e(
-                            Config.APP_LOG_TAG,
-                            "SERVER: REGISTER ACTIVITY DID NOT RECEIVE AN ACTIVITY"
-                        );
-                        sendMessage(msg, MSG_REGISTER_ACTIVITY_FAILED);
-                    } else {
-                        Log.e(
-                            Config.APP_LOG_TAG,
-                            "SERVER: PID OF TRACKED ACTIVITY: " + trackedActivity.pid
-                        );
-                        terminalService.mTrackedActivities.add(trackedActivity);
-                        sendMessage(msg, MSG_REGISTERED_ACTIVITY);
-                    }
-                    break;
-                case MSG_START_TERMINAL_ACTIVITY:
-                    Log.e(Config.APP_LOG_TAG, "SERVER: starting terminal activity");
-                    sendMessage(msg, MSG_NO_REPLY);
-                    Intent activity = new Intent(terminalService, TerminalActivity.class);
-                    activity.addFlags(FLAG_ACTIVITY_NEW_TASK);
-                    startActivity(activity);
-                    sendMessage(msg, MSG_STARTED_TERMINAL_ACTIVITY);
-                    break;
-                case MSG_CALLBACK_INVOKED:
-                    break;
-                default:
-                    break;
-            }
-            // handled messages are handled in background thread
-            // then notify about finished message.
-            synchronized (waitOnMe) {
-                waitOnMe.notifyAll();
-            }
-            return true;
-        }
-    };
-
-    /**
-     * Target we publish for clients to send messages to IncomingHandler.
-     */
-    Messenger mMessenger;
-
-    Messenger setMessenger() {
-        if (ht.getState() == Thread.State.NEW) {
-            ht.start();
-            looper = ht.getLooper();
-            handler = new Handler(looper, callback);
-            mMessenger = new Messenger(handler);
-            Log.e(Config.APP_LOG_TAG, "SERVER: mMessenger set");
-        }
-        return mMessenger;
-    }
-
     @SuppressLint({"Wakelock", "WakelockTimeout"})
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        setMessenger();
         String action = intent.getAction();
         if (INTENT_ACTION_SERVICE_STOP.equals(action)) {
             terminateService();
@@ -327,65 +155,9 @@ public class TerminalService extends Service implements SessionChangedCallback {
         return Service.START_NOT_STICKY;
     }
 
-    public void sendMessage(Message msg, int what) {
-        sendMessage(msg, null, what, 0, 0, null);
-    }
-
-    private void sendMessage(Message msg, int what, int arg1) {
-        sendMessage(msg, null, what, arg1, 0, null);
-    }
-
-    private void sendMessage(Message msg, int what, int arg1, int arg2) {
-        sendMessage(msg, null, what, arg1, arg2, null);
-    }
-
-    public void sendMessage(Message msg, int what, Object obj) {
-        sendMessage(msg, null, what, 0, 0, obj);
-    }
-
-    private void sendMessage(Message msg, int what, int arg1, Object obj) {
-        sendMessage(msg, null, what, arg1, 0, obj);
-    }
-
-    private void sendMessage(Message msg, int what, int arg1, int arg2, Object obj) {
-        sendMessage(msg, null, what, arg1, arg2, obj);
-    }
-
-    public void sendMessage(Message msg, Handler handler, int what, int arg1, int arg2, Object obj) {
-        if (mClients.isEmpty())
-            Log.e(Config.APP_LOG_TAG, "SERVER: ERROR NO CLIENTS CONNECTED");
-        else {
-            try {
-                msg.replyTo.send(Message.obtain(handler, what, arg1, arg2, obj));
-            } catch (RemoteException e) {
-                // The client is dead.  Remove it from the list;
-                // we are going through the list from back to front
-                // so this is safe to do inside the loop.
-                for (int i = mClients.size() - 1; i >= 0; i--) {
-                    try {
-                        mClients.get(i).send(Message.obtain(null, MSG_NO_REPLY));
-                    } catch (RemoteException ex) {
-                        Log.e(Config.APP_LOG_TAG, "SERVER: client " + i + " is dead, removing...");
-                        mClients.remove(i);
-                        Log.e(Config.APP_LOG_TAG, "SERVER: removed client " + i + "");
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * When binding to the service, we return an interface to our messenger
-     * for sending messages to the service.
-     */
     @Override
     public IBinder onBind(Intent intent) {
-        if (intent.hasExtra("BINDING_TYPE")) {
-            if (intent.getStringExtra("BINDING_TYPE").contentEquals("BINDING_LOCAL")) {
-                return new LocalBinder();
-            }
-        }
-        return setMessenger().getBinder();
+        return mBinder;
     }
 
     @Override
@@ -455,7 +227,7 @@ public class TerminalService extends Service implements SessionChangedCallback {
      * @param isLogView     if this is true then this is converted into a LogView instead of a Shell
      * @return              a created terminal session that can be attached to TerminalView.
      */
-    public TerminalSession createShellSession(boolean isLogView, TrackedActivity activity) {
+    public TerminalSession createShellSession(boolean isLogView) {
         ArrayList<String> environment = new ArrayList<>();
         Context appContext = getApplicationContext();
 
@@ -475,7 +247,7 @@ public class TerminalService extends Service implements SessionChangedCallback {
 
         Log.i(Config.APP_LOG_TAG, "initiating sh session with following arguments: " + processArgs.toString());
 
-        TerminalSession session = new TerminalSession(isLogView, "/bin/sh", processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this, activity);
+        TerminalSession session = new TerminalSession(isLogView, "/bin/sh", processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this);
         mTerminalSessions.add(session);
         updateNotification();
         return session;
@@ -485,7 +257,7 @@ public class TerminalService extends Service implements SessionChangedCallback {
      * Creates terminal instance with running 'Logcat'.
      * @return              a created terminal session that can be attached to TerminalView.
      */
-    public TerminalSession createLogcatSession(TrackedActivity activity) {
+    public TerminalSession createLogcatSession() {
         ArrayList<String> environment = new ArrayList<>();
         Context appContext = getApplicationContext();
 
@@ -503,12 +275,11 @@ public class TerminalService extends Service implements SessionChangedCallback {
         ArrayList<String> processArgs = new ArrayList<>();
         processArgs.add("/bin/logcat");
         processArgs.add("-C");
-        if (activity != null) processArgs.add("--pid=" + activity.pid);
-        else processArgs.add("--pid=" + JNI.getPid());
+        processArgs.add("--pid=" + JNI.getPid());
 
         Log.i(Config.APP_LOG_TAG, "initiating sh session with following arguments: " + processArgs.toString());
 
-        TerminalSession session = new TerminalSession(true, "/bin/logcat", processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this, activity);
+        TerminalSession session = new TerminalSession(true, "/bin/logcat", processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this);
         mTerminalSessions.add(session);
         updateNotification();
         return session;
@@ -518,7 +289,7 @@ public class TerminalService extends Service implements SessionChangedCallback {
         Intent notifyIntent = new Intent(this, TerminalActivity.class);
         // PendingIntent#getActivity(): "Note that the activity will be started outside of the context of an existing
         // activity, so you must use the Intent.FLAG_ACTIVITY_NEW_TASK launch flag in the Intent":
-        notifyIntent.addFlags(FLAG_ACTIVITY_NEW_TASK);
+        notifyIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notifyIntent, 0);
 
         StringBuilder contentText = new StringBuilder();
