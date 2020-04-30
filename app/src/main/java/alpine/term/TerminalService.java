@@ -27,15 +27,18 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.net.wifi.WifiManager;
 import android.os.Binder;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.Message;
 import android.os.Messenger;
+import android.os.Parcelable;
 import android.os.PowerManager;
 import android.os.RemoteException;
 import android.util.Log;
@@ -45,7 +48,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import androidx.core.app.NotificationCompat;
-
 import alpine.term.emulator.JNI;
 import alpine.term.emulator.TerminalSession;
 import alpine.term.emulator.TerminalSession.SessionChangedCallback;
@@ -93,7 +95,11 @@ public class TerminalService extends Service implements SessionChangedCallback {
     static final int MSG_UNREGISTER_CLIENT = 3;
     static final int MSG_UNREGISTERED_CLIENT = 4;
 
-    public static final int MSG_START_TERMINAL_ACTIVITY = 5;
+    public static final int MSG_REGISTER_ACTIVITY = 5;
+    static final int MSG_REGISTERED_ACTIVITY = 6;
+    static final int MSG_REGISTER_ACTIVITY_FAILED = 7;
+    public static final int MSG_START_TERMINAL_ACTIVITY = 8;
+    static final int MSG_STARTED_TERMINAL_ACTIVITY = 9;
 
     static final int MSG_CALLBACK_INVOKED = 100;
     static final int MSG_IS_SERVER_ALIVE = 1300;
@@ -107,7 +113,13 @@ public class TerminalService extends Service implements SessionChangedCallback {
      */
     private final List<TerminalSession> mTerminalSessions = new ArrayList<>();
 
-    private final IBinder mBinder = new LocalBinder();
+    /**
+     * The terminal sessions which this service manages.
+     * <p/>
+     * Note that this list is observed by {@link TerminalControllerService#mListViewAdapter}, so any changes must be made on the UI
+     * thread and followed by a call to {@link ArrayAdapter#notifyDataSetChanged()} }.
+     */
+    final List<TrackedActivity> mTrackedActivities = new ArrayList<>();
 
     /**
      * Note that the service may often outlive the activity, so need to clear this reference.
@@ -185,6 +197,7 @@ public class TerminalService extends Service implements SessionChangedCallback {
     Handler handler;
     Handler.Callback callback = new Handler.Callback() {
 
+        @SuppressWarnings("DuplicateBranchesInSwitch")
         @Override
         public boolean handleMessage(Message msg) {
             Log.e(Config.APP_LOG_TAG, "SERVER: received message");
@@ -218,12 +231,32 @@ public class TerminalService extends Service implements SessionChangedCallback {
                     Log.e(Config.APP_LOG_TAG, "SERVER IS ALIVE");
                     sendMessage(msg, MSG_IS_SERVER_ALIVE);
                     break;
+                case MSG_REGISTER_ACTIVITY:
+                    Bundle bundle = msg.getData();
+                    bundle.setClassLoader(getClass().getClassLoader());
+                    TrackedActivity trackedActivity = bundle.getParcelable("ACTIVITY");
+                    if (trackedActivity == null) {
+                        Log.e(
+                            Config.APP_LOG_TAG,
+                            "SERVER: REGISTER ACTIVITY DID NOT RECEIVE AN ACTIVITY"
+                        );
+                        sendMessage(msg, MSG_REGISTER_ACTIVITY_FAILED);
+                    } else {
+                        Log.e(
+                            Config.APP_LOG_TAG,
+                            "SERVER: PID OF TRACKED ACTIVITY: " + trackedActivity.pid
+                        );
+                        terminalService.mTrackedActivities.add(trackedActivity);
+                        sendMessage(msg, MSG_REGISTERED_ACTIVITY);
+                    }
+                    break;
                 case MSG_START_TERMINAL_ACTIVITY:
                     Log.e(Config.APP_LOG_TAG, "SERVER: starting terminal activity");
                     sendMessage(msg, MSG_NO_REPLY);
                     Intent activity = new Intent(terminalService, TerminalActivity.class);
                     activity.addFlags(FLAG_ACTIVITY_NEW_TASK);
                     startActivity(activity);
+                    sendMessage(msg, MSG_STARTED_TERMINAL_ACTIVITY);
                     break;
                 case MSG_CALLBACK_INVOKED:
                     break;
@@ -348,8 +381,9 @@ public class TerminalService extends Service implements SessionChangedCallback {
     @Override
     public IBinder onBind(Intent intent) {
         if (intent.hasExtra("BINDING_TYPE")) {
-            if (intent.getStringExtra("BINDING_TYPE").contentEquals("BINDING_LOCAL"))
-                return mBinder;
+            if (intent.getStringExtra("BINDING_TYPE").contentEquals("BINDING_LOCAL")) {
+                return new LocalBinder();
+            }
         }
         return setMessenger().getBinder();
     }
@@ -421,7 +455,7 @@ public class TerminalService extends Service implements SessionChangedCallback {
      * @param isLogView     if this is true then this is converted into a LogView instead of a Shell
      * @return              a created terminal session that can be attached to TerminalView.
      */
-    public TerminalSession createShellSession(boolean isLogView) {
+    public TerminalSession createShellSession(boolean isLogView, TrackedActivity activity) {
         ArrayList<String> environment = new ArrayList<>();
         Context appContext = getApplicationContext();
 
@@ -441,7 +475,7 @@ public class TerminalService extends Service implements SessionChangedCallback {
 
         Log.i(Config.APP_LOG_TAG, "initiating sh session with following arguments: " + processArgs.toString());
 
-        TerminalSession session = new TerminalSession(isLogView, "/bin/sh", processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this);
+        TerminalSession session = new TerminalSession(isLogView, "/bin/sh", processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this, activity);
         mTerminalSessions.add(session);
         updateNotification();
         return session;
@@ -451,7 +485,7 @@ public class TerminalService extends Service implements SessionChangedCallback {
      * Creates terminal instance with running 'Logcat'.
      * @return              a created terminal session that can be attached to TerminalView.
      */
-    public TerminalSession createLogcatSession() {
+    public TerminalSession createLogcatSession(TrackedActivity activity) {
         ArrayList<String> environment = new ArrayList<>();
         Context appContext = getApplicationContext();
 
@@ -469,11 +503,12 @@ public class TerminalService extends Service implements SessionChangedCallback {
         ArrayList<String> processArgs = new ArrayList<>();
         processArgs.add("/bin/logcat");
         processArgs.add("-C");
-        processArgs.add("--pid=" + JNI.getPid());
+        if (activity != null) processArgs.add("--pid=" + activity.pid);
+        else processArgs.add("--pid=" + JNI.getPid());
 
         Log.i(Config.APP_LOG_TAG, "initiating sh session with following arguments: " + processArgs.toString());
 
-        TerminalSession session = new TerminalSession(true, "/bin/logcat", processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this);
+        TerminalSession session = new TerminalSession(true, "/bin/logcat", processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this, activity);
         mTerminalSessions.add(session);
         updateNotification();
         return session;

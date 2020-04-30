@@ -7,21 +7,27 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.pm.ActivityInfo;
+import android.content.pm.PackageManager;
+import android.content.res.Resources;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Typeface;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.Message;
 import android.os.Messenger;
+import android.os.Parcel;
 import android.os.RemoteException;
 import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.TextUtils;
 import android.text.style.StyleSpan;
 import android.util.Log;
+import android.util.Pair;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
@@ -71,6 +77,7 @@ public class TerminalControllerService implements ServiceConnection {
     Handler handler;
     Handler.Callback callback = new Handler.Callback() {
 
+        @SuppressWarnings("DuplicateBranchesInSwitch")
         @Override
         public boolean handleMessage(Message msg) {
             Log.e(Config.APP_LOG_TAG, "CLIENT: received message");
@@ -89,6 +96,14 @@ public class TerminalControllerService implements ServiceConnection {
                     Log.e(Config.APP_LOG_TAG, "CLIENT: SERVER IS ALIVE");
                     sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
                     break;
+                case TerminalService.MSG_REGISTER_ACTIVITY_FAILED:
+                    sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
+                    break;
+                case TerminalService.MSG_REGISTERED_ACTIVITY:
+                    sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
+                    break;
+                case TerminalService.MSG_STARTED_TERMINAL_ACTIVITY:
+                    break;
                 default:
                     sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
                     break;
@@ -103,32 +118,57 @@ public class TerminalControllerService implements ServiceConnection {
     };
 
     public boolean sendMessageToServer(int what) {
-        return sendMessageToServer(null, what, 0, 0, null);
+        return sendMessageToServer(null, what, 0, 0, null, null);
     }
 
     private boolean sendMessageToServer(int what, int arg1) {
-        return sendMessageToServer(null, what, arg1, 0, null);
+        return sendMessageToServer(null, what, arg1, 0, null, null);
     }
 
     private boolean sendMessageToServer(int what, int arg1, int arg2) {
-        return sendMessageToServer(null, what, arg1, arg2, null);
+        return sendMessageToServer(null, what, arg1, arg2, null, null);
     }
 
     public boolean sendMessageToServer(int what, Object obj) {
-        return sendMessageToServer(null, what, 0, 0, obj);
+        return sendMessageToServer(null, what, 0, 0, obj, null);
     }
 
     private boolean sendMessageToServer(int what, int arg1, Object obj) {
-        return sendMessageToServer(null, what, arg1, 0, obj);
+        return sendMessageToServer(null, what, arg1, 0, obj, null);
     }
 
     private boolean sendMessageToServer(int what, int arg1, int arg2, Object obj) {
-        return sendMessageToServer(null, what, arg1, arg2, obj);
+        return sendMessageToServer(null, what, arg1, arg2, obj, null);
     }
 
-    public boolean sendMessageToServer(Handler handler, int what, int arg1, int arg2, Object obj) {
+    public boolean sendMessageToServer(int what, Bundle bundle) {
+        return sendMessageToServer(null, what, 0, 0, null, bundle);
+    }
+
+    private boolean sendMessageToServer(int what, int arg1, Bundle bundle) {
+        return sendMessageToServer(null, what, arg1, 0, null, bundle);
+    }
+
+    private boolean sendMessageToServer(int what, int arg1, int arg2, Bundle bundle) {
+        return sendMessageToServer(null, what, arg1, arg2, null, bundle);
+    }
+
+    public boolean sendMessageToServer(int what, Object obj, Bundle bundle) {
+        return sendMessageToServer(null, what, 0, 0, obj, bundle);
+    }
+
+    private boolean sendMessageToServer(int what, int arg1, Object obj, Bundle bundle) {
+        return sendMessageToServer(null, what, arg1, 0, obj, bundle);
+    }
+
+    private boolean sendMessageToServer(int what, int arg1, int arg2, Object obj, Bundle bundle) {
+        return sendMessageToServer(null, what, arg1, arg2, obj, bundle);
+    }
+
+    public boolean sendMessageToServer(Handler handler, int what, int arg1, int arg2, Object obj, Bundle bundle) {
         try {
             Message msg = Message.obtain(handler, what, arg1, arg2, obj);
+            if (bundle != null) msg.setData(bundle);
             msg.replyTo = mMessenger;
             mService.send(msg);
             waitForReply();
@@ -141,9 +181,32 @@ public class TerminalControllerService implements ServiceConnection {
     }
 
     public boolean sendMessageToServerNonBlocking(int what) {
+        return sendMessageToServerNonBlocking(null, what, 0, 0, null);
+    }
+
+    private boolean sendMessageToServerNonBlocking(int what, int arg1) {
+        return sendMessageToServerNonBlocking(null, what, arg1, 0, null);
+    }
+
+    private boolean sendMessageToServerNonBlocking(int what, int arg1, int arg2) {
+        return sendMessageToServerNonBlocking(null, what, arg1, arg2, null);
+    }
+
+    public boolean sendMessageToServerNonBlocking(int what, Object obj) {
+        return sendMessageToServerNonBlocking(null, what, 0, 0, obj);
+    }
+
+    private boolean sendMessageToServerNonBlocking(int what, int arg1, Object obj) {
+        return sendMessageToServerNonBlocking(null, what, arg1, 0, obj);
+    }
+
+    private boolean sendMessageToServerNonBlocking(int what, int arg1, int arg2, Object obj) {
+        return sendMessageToServerNonBlocking(null, what, arg1, arg2, obj);
+    }
+
+    public boolean sendMessageToServerNonBlocking(Handler handler, int what, int arg1, int arg2, Object obj) {
         try {
-            Message msg = Message.obtain(null,
-                what);
+            Message msg = Message.obtain(handler, what, arg1, arg2, obj);
             msg.replyTo = mMessenger;
             mService.send(msg);
             return true;
@@ -168,7 +231,7 @@ public class TerminalControllerService implements ServiceConnection {
         Log.e(Config.APP_LOG_TAG, "onServiceConnected() has been called");
         if (boundService instanceof TerminalService.LocalBinder) {
             TerminalService.LocalBinder b = (TerminalService.LocalBinder) boundService;
-                terminalController.mTermService = b.service;
+            terminalController.mTermService = b.service;
             Log.e(Config.APP_LOG_TAG, "CLIENT: CREATED LOCAL SERVICE");
             isLocalService = true;
         } else {
@@ -360,9 +423,20 @@ public class TerminalControllerService implements ServiceConnection {
 
         if (terminalController.mTermService.getSessions().isEmpty()) {
             if (terminalController.mIsVisible) {
-                TerminalSession log = createLog();
-                createLogcat();
-                terminalController.switchToSession(log);
+                if (terminalController.mTermService.mTrackedActivities.isEmpty()) {
+                    Log.e(Config.APP_LOG_TAG, "mTrackedActivities is empty");
+                    TerminalSession log = createLog();
+                    createLogcat();
+                    terminalController.switchToSession(log);
+                } else {
+                    Log.e(Config.APP_LOG_TAG, "mTrackedActivities is not empty");
+                    // create a log and logcat for each registered activity
+                    for (TrackedActivity activity : terminalController.mTermService.mTrackedActivities) {
+                        TerminalSession log = createLog(activity);
+                        createLogcat(activity);
+                        terminalController.switchToSession(log);
+                    }
+                }
             } else {
                 // The service connected while not in foreground - just bail out.
                 terminalController.activity.finish();
@@ -385,16 +459,23 @@ public class TerminalControllerService implements ServiceConnection {
     }
 
     public TerminalSession createLog() {
+        return createLog(null);
+    }
+
+    public TerminalSession createLog(TrackedActivity activity) {
         if (terminalController.mTermService == null) return null;
         TerminalSession session;
         TerminalSession currentSession = terminalController.mTerminalView.getCurrentSession();
 
-        session = terminalController.mTermService.createShellSession(true);
+        session = terminalController.mTermService.createShellSession(true, activity);
         terminalController.mTerminalView.attachSession(session);
 
         int logPid;
         logPid = session.getPid();
-        session.mSessionName = "LOG [pid=" + logPid + "]";
+        if (activity == null)
+            session.mSessionName = "LOG [pid=" + logPid + "]";
+        else
+            session.mSessionName = "LOG [pid=" + logPid + ", " + activity.packageName + "]";
         JNI.puts(String.format(Locale.ENGLISH, "log has started, pid is %d", logPid));
 
         terminalController.switchToSession(currentSession, session);
@@ -403,16 +484,24 @@ public class TerminalControllerService implements ServiceConnection {
     }
 
     public TerminalSession createLogcat() {
+        return createLogcat(null);
+    }
+
+    public TerminalSession createLogcat(TrackedActivity activity) {
         if (terminalController.mTermService == null) return null;
         TerminalSession session;
         TerminalSession currentSession = terminalController.mTerminalView.getCurrentSession();
 
-        session = terminalController.mTermService.createLogcatSession();
+        session = terminalController.mTermService.createLogcatSession(activity);
         terminalController.mTerminalView.attachSession(session);
 
         int logPid;
         logPid = session.getPid();
-        session.mSessionName = "logcat -C --pid=" + JNI.getPid() + " [pid=" + logPid + "]";
+        if (activity == null)
+            session.mSessionName = "logcat -C --pid=" + JNI.getPid() + " [pid=" + logPid + "]";
+        else
+            session.mSessionName =
+                "logcat -C --pid=" + activity.pid + " [" + activity.packageName + "]";
         JNI.puts(String.format(Locale.ENGLISH, "logcat has started, pid is %d", logPid));
 
         terminalController.switchToSession(currentSession, session);
@@ -421,11 +510,15 @@ public class TerminalControllerService implements ServiceConnection {
     }
 
     public TerminalSession createShell() {
+        return createShell(null);
+    }
+
+    public TerminalSession createShell(TrackedActivity activity) {
         if (terminalController.mTermService == null) return null;
         TerminalSession session;
         TerminalSession currentSession = terminalController.mTerminalView.getCurrentSession();
 
-        session = terminalController.mTermService.createShellSession(false);
+        session = terminalController.mTermService.createShellSession(false, activity);
         terminalController.mTerminalView.attachSession(session);
 
         int shellPid;
@@ -470,8 +563,32 @@ public class TerminalControllerService implements ServiceConnection {
         mIsBound = true;
     }
 
+    public void registerActivity(Activity activity) {
+        TrackedActivity trackedActivity = new TrackedActivity();
+        trackedActivity.packageName = activity.getPackageName();
+        trackedActivity.pid = JNI.getPid();
+        PackageManager pm = activity.getPackageManager();
+        ComponentName componentName = activity.getComponentName();
+        ActivityInfo activityInfo;
+        try {
+            activityInfo = pm.getActivityInfo(componentName, 0);
+            trackedActivity.activityInfo = activityInfo;
+            Resources resources = activity.getResources();
+            int labelRes = activityInfo.labelRes;
+            if (labelRes != 0)
+                trackedActivity.label = resources.getString(labelRes);
+            int descriptionRes = activityInfo.descriptionRes;
+            if (descriptionRes != 0)
+                trackedActivity.description = resources.getString(descriptionRes);
+        } catch (PackageManager.NameNotFoundException e) {
+            e.printStackTrace();
+        }
+        Bundle bundle = new Bundle();
+        bundle.putParcelable("ACTIVITY", trackedActivity);
+        sendMessageToServer(TerminalService.MSG_REGISTER_ACTIVITY, bundle);
+    }
+
     public void startTerminalActivity() {
-        Log.e(Config.APP_LOG_TAG, "CLIENT: PID is " + JNI.getPid());
-        sendMessageToServer(TerminalService.MSG_START_TERMINAL_ACTIVITY, JNI.getPid());
+        sendMessageToServer(TerminalService.MSG_START_TERMINAL_ACTIVITY);
     }
 }
