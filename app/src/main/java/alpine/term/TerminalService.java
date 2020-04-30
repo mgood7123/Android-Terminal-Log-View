@@ -36,8 +36,6 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.Message;
 import android.os.Messenger;
-import android.os.Parcel;
-import android.os.Parcelable;
 import android.os.PowerManager;
 import android.os.RemoteException;
 import android.util.Log;
@@ -52,6 +50,8 @@ import alpine.term.emulator.JNI;
 import alpine.term.emulator.TerminalSession;
 import alpine.term.emulator.TerminalSession.SessionChangedCallback;
 
+import static android.content.Intent.FLAG_ACTIVITY_NEW_TASK;
+
 /**
  * A service holding a list of terminal sessions, {@link #mTerminalSessions}, showing a foreground notification while
  * running so that it is not terminated. The user interacts with the session through {@link TerminalActivity}, but this
@@ -64,7 +64,7 @@ import alpine.term.emulator.TerminalSession.SessionChangedCallback;
  * Optionally may hold a wake and a wifi lock, in which case that is shown in the notification - see
  * {@link #buildNotification()}.
  */
-public class TerminalService extends Service implements SessionChangedCallback, Parcelable {
+public class TerminalService extends Service implements SessionChangedCallback {
 
     private static final String INTENT_ACTION_SERVICE_STOP = "alpine.term.ACTION_STOP_SERVICE";
     private static final String INTENT_ACTION_WAKELOCK_ENABLE = "alpine.term.ACTION_ENABLE_WAKELOCK";
@@ -72,6 +72,7 @@ public class TerminalService extends Service implements SessionChangedCallback, 
 
     private static final int NOTIFICATION_ID = 1338;
     private static final String NOTIFICATION_CHANNEL_ID = "alpine.term.NOTIFICATION_CHANNEL";
+
     /** Keeps track of all current registered clients. */
     ArrayList<Messenger> mClients = new ArrayList<Messenger>();
 
@@ -90,35 +91,23 @@ public class TerminalService extends Service implements SessionChangedCallback, 
      */
 
     static final int MSG_UNREGISTER_CLIENT = 3;
+    static final int MSG_UNREGISTERED_CLIENT = 4;
 
-    // callbacks
-    static final int MSG_ON_TITLE_CHANGED = 4;
-    static final int MSG_ON_SESSION_FINISHED = 5;
-    static final int MSG_ON_TEXT_CHANGED = 6;
-    static final int MSG_ON_CLIPBOARD_TEXT = 7;
-    static final int MSG_ON_BELL = 8;
-    static final int MSG_ON_COLORS_CHANGED = 9;
-    static final int MSG_ARE_SESSIONS_EMPTY = 10;
-    static final int MSG_DOES_SERVER_WANT_TO_STOP = 11;
-    static final int MSG_REMOVE_SESSION = 12;
-    static final int MSG_CREATE_SHELL_SESSION = 13;
-    static final int MSG_CREATE_LOGCAT_SESSION = 14;
-    static final int MSG_SESSION_CREATED = 15;
-    static final int MSG_ATTACH_SESSION = 16;
+    public static final int MSG_START_TERMINAL_ACTIVITY = 5;
 
     static final int MSG_CALLBACK_INVOKED = 100;
-    static final int MSG_TERMINATE = 500;
     static final int MSG_IS_SERVER_ALIVE = 1300;
+    static final int MSG_NO_REPLY = 999;
 
     /**
      * The terminal sessions which this service manages.
      * <p/>
-     * Note that this list is observed by {@link TerminalActivity#mListViewAdapter}, so any changes must be made on the UI
+     * Note that this list is observed by {@link TerminalControllerService#mListViewAdapter}, so any changes must be made on the UI
      * thread and followed by a call to {@link ArrayAdapter#notifyDataSetChanged()} }.
      */
     private final List<TerminalSession> mTerminalSessions = new ArrayList<>();
 
-    private IBinder mBinder = new LocalBinder();
+    private final IBinder mBinder = new LocalBinder();
 
     /**
      * Note that the service may often outlive the activity, so need to clear this reference.
@@ -136,38 +125,6 @@ public class TerminalService extends Service implements SessionChangedCallback, 
     private PowerManager.WakeLock mWakeLock;
     private WifiManager.WifiLock mWifiLock;
 
-    // the current terminal session object
-    private TerminalSession mTermSession;
-
-    // provide zero argument constructor to avoid the following error:
-
-    // java.lang.RuntimeException: Unable to instantiate service
-    // alpine.term.TerminalService: java.lang.InstantiationException:
-    // java.lang.Class<alpine.term.TerminalService> has no zero argument constructor
-
-    // make it public
-
-    // java.lang.RuntimeException: Unable to instantiate service alpine.term.TerminalService:
-    // java.lang.IllegalAccessException: void alpine.term.TerminalService.<init>() is not
-    // accessible from java.lang.Class<android.app.AppComponentFactory>
-
-    public TerminalService() {}
-
-    protected TerminalService(Parcel in) {
-        mBinder = in.readStrongBinder();
-    }
-
-    public static final Creator<TerminalService> CREATOR = new Creator<TerminalService>() {
-        @Override
-        public TerminalService createFromParcel(Parcel in) {
-            return new TerminalService(in);
-        }
-
-        @Override
-        public TerminalService[] newArray(int size) {
-            return new TerminalService[size];
-        }
-    };
 
     @Override
     public void onCreate() {
@@ -194,7 +151,7 @@ public class TerminalService extends Service implements SessionChangedCallback, 
         }
     }
 
-    public void waitForReply() {
+    public void waitForClientToReply() {
         Log.e(Config.APP_LOG_TAG, "CLIENT: waiting for reply");
         synchronized (waitOnMe) {
             try {
@@ -221,6 +178,8 @@ public class TerminalService extends Service implements SessionChangedCallback, 
     // available for all threads somehow
     final Object waitOnMe = new Object();
 
+    final TerminalService terminalService = this;
+
     HandlerThread ht = new HandlerThread("threadName");
     Looper looper;
     Handler handler;
@@ -228,37 +187,46 @@ public class TerminalService extends Service implements SessionChangedCallback, 
 
         @Override
         public boolean handleMessage(Message msg) {
+            Log.e(Config.APP_LOG_TAG, "SERVER: received message");
             switch (msg.what) {
                 case MSG_REGISTER_CLIENT:
                     mClients.add(msg.replyTo);
                     Log.e(Config.APP_LOG_TAG, "SERVER: registered client");
                     Log.e(Config.APP_LOG_TAG, "SERVER: informing client of registration");
-                    sendMessageToAllClients(MSG_REGISTERED_CLIENT);
-                    Log.e(Config.APP_LOG_TAG, "SERVER: informed client of registration");
+                    sendMessage(msg, MSG_REGISTERED_CLIENT);
+                    new Thread() {
+                        @Override
+                        public void run() {
+                            waitForClientToReply();
+                            Log.e(Config.APP_LOG_TAG, "SERVER: informed client of registration");
+                        }
+                    }.start();
                     break;
                 case MSG_UNREGISTER_CLIENT:
-                    mClients.remove(msg.replyTo);
-                    break;
-                case MSG_ARE_SESSIONS_EMPTY:
-                    sendMessageToAllClients(MSG_ARE_SESSIONS_EMPTY, toInt(getSessions().isEmpty()));
-                    break;
-                case MSG_DOES_SERVER_WANT_TO_STOP:
-                    sendMessageToAllClients(MSG_DOES_SERVER_WANT_TO_STOP, toInt(mWantsToStop));
-                    break;
-                case MSG_REMOVE_SESSION:
-                    removeSession(session);
-                    sendMessageToAllClients(MSG_CALLBACK_INVOKED);
-                    break;
-                case MSG_TERMINATE:
-                    sendMessageToAllClients(MSG_CALLBACK_INVOKED);
-                    terminateService();
+                    Log.e(Config.APP_LOG_TAG, "SERVER: unregistering client");
+                    sendMessage(msg, MSG_UNREGISTERED_CLIENT);
+                    new Thread() {
+                        @Override
+                        public void run() {
+                            waitForClientToReply();
+                            mClients.remove(msg.replyTo);
+                            Log.e(Config.APP_LOG_TAG, "SERVER: unregistered client");
+                        }
+                    }.start();
                     break;
                 case MSG_IS_SERVER_ALIVE:
+                    Log.e(Config.APP_LOG_TAG, "SERVER IS ALIVE");
+                    sendMessage(msg, MSG_IS_SERVER_ALIVE);
                     break;
-                case MSG_ATTACH_SESSION:
-                    mTermSession = mTerminalSessions.get(msg.arg1);
-                case MSG_CREATE_SHELL_SESSION:
-                    sendMessageToAllClients(MSG_SESSION_CREATED, createShellSession(toBoolean(msg.arg1));
+                case MSG_START_TERMINAL_ACTIVITY:
+                    Log.e(Config.APP_LOG_TAG, "SERVER: starting terminal activity");
+                    sendMessage(msg, MSG_NO_REPLY);
+                    Intent activity = new Intent(terminalService, TerminalActivity.class);
+                    activity.addFlags(FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(activity);
+                    break;
+                case MSG_CALLBACK_INVOKED:
+                    break;
                 default:
                     break;
             }
@@ -276,16 +244,25 @@ public class TerminalService extends Service implements SessionChangedCallback, 
      */
     Messenger mMessenger;
 
+    Messenger setMessenger() {
+        if (ht.getState() == Thread.State.NEW) {
+            ht.start();
+            looper = ht.getLooper();
+            handler = new Handler(looper, callback);
+            mMessenger = new Messenger(handler);
+            Log.e(Config.APP_LOG_TAG, "SERVER: mMessenger set");
+        }
+        return mMessenger;
+    }
+
     @SuppressLint({"Wakelock", "WakelockTimeout"})
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        Log.e(Config.APP_LOG_TAG, "onStartCommand() has been called");
+        setMessenger();
         String action = intent.getAction();
         if (INTENT_ACTION_SERVICE_STOP.equals(action)) {
-            Log.e(Config.APP_LOG_TAG, "terminating");
             terminateService();
         } else if (INTENT_ACTION_WAKELOCK_ENABLE.equals(action)) {
-            Log.e(Config.APP_LOG_TAG, "received wakelock");
             if (mWakeLock == null) {
                 PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
                 mWakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, Config.WAKELOCK_LOG_TAG);
@@ -299,7 +276,6 @@ public class TerminalService extends Service implements SessionChangedCallback, 
                 updateNotification();
             }
         } else if (INTENT_ACTION_WAKELOCK_DISABLE.equals(action)) {
-            Log.e(Config.APP_LOG_TAG, "received disable wakelock");
             if (mWakeLock != null) {
                 mWakeLock.release();
                 mWakeLock = null;
@@ -310,60 +286,59 @@ public class TerminalService extends Service implements SessionChangedCallback, 
                 updateNotification();
             }
         } else if (action != null) {
-            Log.e(Config.APP_LOG_TAG, "received an unknown action for TerminalService: " + action);
-        }
-
-        if (ht.getState() == Thread.State.NEW) {
-            ht.start();
-            looper = ht.getLooper();
-            handler = new Handler(looper, callback);
-            mMessenger = new Messenger(handler);
+            Log.w(Config.APP_LOG_TAG, "received an unknown action for TerminalService: " + action);
         }
 
         // If this service really do get killed, there is no point restarting it automatically - let the user do on next
         // start of {@link Term):
-        Log.e(Config.APP_LOG_TAG, "returning START_NOT_STICKY");
         return Service.START_NOT_STICKY;
     }
 
-    public void sendMessageToAllClients(int what) {
-        sendMessageToAllClients(null, what, 0, 0, null);
+    public void sendMessage(Message msg, int what) {
+        sendMessage(msg, null, what, 0, 0, null);
     }
 
-    private void sendMessageToAllClients(int what, int arg1) {
-        sendMessageToAllClients(null, what, arg1, 0, null);
+    private void sendMessage(Message msg, int what, int arg1) {
+        sendMessage(msg, null, what, arg1, 0, null);
     }
 
-    private void sendMessageToAllClients(int what, int arg1, int arg2) {
-        sendMessageToAllClients(null, what, arg1, arg2, null);
+    private void sendMessage(Message msg, int what, int arg1, int arg2) {
+        sendMessage(msg, null, what, arg1, arg2, null);
     }
 
-    public void sendMessageToAllClients(int what, Object obj) {
-        sendMessageToAllClients(null, what, 0, 0, obj);
+    public void sendMessage(Message msg, int what, Object obj) {
+        sendMessage(msg, null, what, 0, 0, obj);
     }
 
-    private void sendMessageToAllClients(int what, int arg1, Object obj) {
-        sendMessageToAllClients(null, what, arg1, 0, obj);
+    private void sendMessage(Message msg, int what, int arg1, Object obj) {
+        sendMessage(msg, null, what, arg1, 0, obj);
     }
 
-    private void sendMessageToAllClients(int what, int arg1, int arg2, Object obj) {
-        sendMessageToAllClients(null, what, arg1, arg2, obj);
+    private void sendMessage(Message msg, int what, int arg1, int arg2, Object obj) {
+        sendMessage(msg, null, what, arg1, arg2, obj);
     }
 
-    public void sendMessageToAllClients(Handler handler, int what, int arg1, int arg2, Object obj) {
-        for (int i=mClients.size()-1; i>=0; i--) {
+    public void sendMessage(Message msg, Handler handler, int what, int arg1, int arg2, Object obj) {
+        if (mClients.isEmpty())
+            Log.e(Config.APP_LOG_TAG, "SERVER: ERROR NO CLIENTS CONNECTED");
+        else {
             try {
-                mClients.get(i).send(Message.obtain(handler, what, arg1, arg2, obj));
+                msg.replyTo.send(Message.obtain(handler, what, arg1, arg2, obj));
             } catch (RemoteException e) {
                 // The client is dead.  Remove it from the list;
                 // we are going through the list from back to front
                 // so this is safe to do inside the loop.
-                Log.e(Config.APP_LOG_TAG, "SERVER: client " + i + " is dead, removing...");
-                mClients.remove(i);
-                Log.e(Config.APP_LOG_TAG, "SERVER: removed client " + i + "");
+                for (int i = mClients.size() - 1; i >= 0; i--) {
+                    try {
+                        mClients.get(i).send(Message.obtain(null, MSG_NO_REPLY));
+                    } catch (RemoteException ex) {
+                        Log.e(Config.APP_LOG_TAG, "SERVER: client " + i + " is dead, removing...");
+                        mClients.remove(i);
+                        Log.e(Config.APP_LOG_TAG, "SERVER: removed client " + i + "");
+                    }
+                }
             }
         }
-        waitForReply();
     }
 
     /**
@@ -372,37 +347,53 @@ public class TerminalService extends Service implements SessionChangedCallback, 
      */
     @Override
     public IBinder onBind(Intent intent) {
-        return mMessenger.getBinder();
+        if (intent.hasExtra("BINDING_TYPE")) {
+            if (intent.getStringExtra("BINDING_TYPE").contentEquals("BINDING_LOCAL"))
+                return mBinder;
+        }
+        return setMessenger().getBinder();
     }
 
     @Override
     public void onTitleChanged(TerminalSession changedSession) {
-        sendMessageToAllClients(MSG_ON_TITLE_CHANGED);
+        if (mSessionChangeCallback != null) {
+            mSessionChangeCallback.onTitleChanged(changedSession);
+        }
     }
 
     @Override
     public void onSessionFinished(final TerminalSession finishedSession) {
-        sendMessageToAllClients(MSG_ON_SESSION_FINISHED);
+        if (mSessionChangeCallback != null) {
+            mSessionChangeCallback.onSessionFinished(finishedSession);
+        }
     }
 
     @Override
     public void onTextChanged(TerminalSession changedSession) {
-        sendMessageToAllClients(MSG_ON_TEXT_CHANGED);
+        if (mSessionChangeCallback != null) {
+            mSessionChangeCallback.onTextChanged(changedSession);
+        }
     }
 
     @Override
     public void onClipboardText(TerminalSession session, String text) {
-        sendMessageToAllClients(MSG_ON_CLIPBOARD_TEXT);
+        if (mSessionChangeCallback != null) {
+            mSessionChangeCallback.onClipboardText(session, text);
+        }
     }
 
     @Override
     public void onBell(TerminalSession session) {
-        sendMessageToAllClients(MSG_ON_BELL);
+        if (mSessionChangeCallback != null) {
+            mSessionChangeCallback.onBell(session);
+        }
     }
 
     @Override
     public void onColorsChanged(TerminalSession session) {
-        sendMessageToAllClients(MSG_ON_COLORS_CHANGED);
+        if (mSessionChangeCallback != null) {
+            mSessionChangeCallback.onColorsChanged(session);
+        }
     }
 
     public boolean removeSession(TerminalSession session) {
@@ -410,12 +401,10 @@ public class TerminalService extends Service implements SessionChangedCallback, 
     }
 
     public List<TerminalSession> getSessions() {
-        Log.e(Config.APP_LOG_TAG, "getSessions() has been called");
         return mTerminalSessions;
     }
 
     public void terminateService() {
-        Log.e(Config.APP_LOG_TAG, "terminateService() has been called");
         mWantsToStop = true;
 
         if (!mTerminalSessions.isEmpty()) {
@@ -432,8 +421,7 @@ public class TerminalService extends Service implements SessionChangedCallback, 
      * @param isLogView     if this is true then this is converted into a LogView instead of a Shell
      * @return              a created terminal session that can be attached to TerminalView.
      */
-    public int createShellSession(boolean isLogView) {
-        Log.e(Config.APP_LOG_TAG, "createShellSession() has been called");
+    public TerminalSession createShellSession(boolean isLogView) {
         ArrayList<String> environment = new ArrayList<>();
         Context appContext = getApplicationContext();
 
@@ -456,14 +444,14 @@ public class TerminalService extends Service implements SessionChangedCallback, 
         TerminalSession session = new TerminalSession(isLogView, "/bin/sh", processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this);
         mTerminalSessions.add(session);
         updateNotification();
-        return mTerminalSessions.indexOf(session);
+        return session;
     }
 
     /**
      * Creates terminal instance with running 'Logcat'.
      * @return              a created terminal session that can be attached to TerminalView.
      */
-    public int createLogcatSession() {
+    public TerminalSession createLogcatSession() {
         ArrayList<String> environment = new ArrayList<>();
         Context appContext = getApplicationContext();
 
@@ -488,14 +476,14 @@ public class TerminalService extends Service implements SessionChangedCallback, 
         TerminalSession session = new TerminalSession(true, "/bin/logcat", processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this);
         mTerminalSessions.add(session);
         updateNotification();
-        return mTerminalSessions.indexOf(session);
+        return session;
     }
 
     private Notification buildNotification() {
         Intent notifyIntent = new Intent(this, TerminalActivity.class);
         // PendingIntent#getActivity(): "Note that the activity will be started outside of the context of an existing
         // activity, so you must use the Intent.FLAG_ACTIVITY_NEW_TASK launch flag in the Intent":
-        notifyIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        notifyIntent.addFlags(FLAG_ACTIVITY_NEW_TASK);
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notifyIntent, 0);
 
         StringBuilder contentText = new StringBuilder();
@@ -547,34 +535,6 @@ public class TerminalService extends Service implements SessionChangedCallback, 
         } else {
             ((NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE)).notify(NOTIFICATION_ID, buildNotification());
         }
-    }
-
-    /**
-     * Describe the kinds of special objects contained in this Parcelable
-     * instance's marshaled representation. For example, if the object will
-     * include a file descriptor in the output of {@link #writeToParcel(Parcel, int)},
-     * the return value of this method must include the
-     * {@link #CONTENTS_FILE_DESCRIPTOR} bit.
-     *
-     * @return a bitmask indicating the set of special object types marshaled
-     * by this Parcelable object instance.
-     */
-    @Override
-    public int describeContents() {
-        return 0;
-    }
-
-    /**
-     * Flatten this object in to a Parcel.
-     *
-     * @param dest  The Parcel in which the object should be written.
-     * @param flags Additional flags about how the object should be written.
-     *              May be 0 or {@link #PARCELABLE_WRITE_RETURN_VALUE}.
-     */
-    @Override
-    public void writeToParcel(Parcel dest, int flags) {
-        dest.writeStrongBinder(mBinder);
-        dest.writeByte((byte) (mWantsToStop ? 1 : 0));
     }
 
     /**

@@ -389,12 +389,12 @@ JNIEXPORT void JNICALL Java_alpine_term_emulator_JNI_close(JNIEnv* ALPINE_TERM_U
 }
 
 JNIEXPORT void JNICALL Java_alpine_term_emulator_JNI_test_1puts(JNIEnv * ALPINE_TERM_UNUSED(env), jclass ALPINE_TERM_UNUSED(clazz)) {
-    puts("HELLO FROM NATIVE CPP");
+    printf("HELLO FROM NATIVE CPP\n");
 }
 
 JNIEXPORT void JNICALL Java_alpine_term_emulator_JNI_puts(JNIEnv * ALPINE_TERM_UNUSED(env), jclass ALPINE_TERM_UNUSED(clazz), jstring fmt) {
     char const* fmt_utf8 = (*env)->GetStringUTFChars(env, fmt, NULL);
-    puts(fmt_utf8);
+    printf("%s\n", fmt_utf8);
     (*env)->ReleaseStringUTFChars(env, fmt, fmt_utf8);
 }
 

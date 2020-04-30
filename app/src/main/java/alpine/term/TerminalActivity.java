@@ -23,8 +23,6 @@ import android.app.Activity;
 import android.graphics.Paint;
 import android.graphics.Typeface;
 import android.os.Bundle;
-import android.os.SystemClock;
-import android.util.Log;
 import android.view.ContextMenu;
 import android.view.ContextMenu.ContextMenuInfo;
 import android.view.Menu;
@@ -34,8 +32,6 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
-
-import alpine.term.emulator.JNI;
 
 /**
  * A terminal emulator activity.
@@ -62,10 +58,6 @@ public final class TerminalActivity extends Activity {
         terminalController = new TerminalController();
         terminalController.onCreate(this, findViewById(R.id.terminal_view));
 
-//        JNI.puts("onCreate()");
-        Log.v(Config.APP_LOG_TAG, "sleeping for 5 seconds");
-//        SystemClock.sleep(5000);
-        Log.v(Config.APP_LOG_TAG, "slept for 5 seconds");
 
         Button toggleTerminal = findViewById(R.id.toggle_terminal);
         int visibility = terminalController.terminalContainer.getVisibility();
@@ -117,31 +109,24 @@ public final class TerminalActivity extends Activity {
         tv.setText(stringBuilder.toString());
 
         rl.addView(tv);
-        Log.i(Config.APP_LOG_TAG, "onCreate()");
     }
 
     @Override
     protected void onStart() {
         super.onStart();
         terminalController.onStart();
-        Log.i(Config.APP_LOG_TAG, "onStart()");
-//        JNI.puts("onStart()");
     }
 
     @Override
     protected void onStop() {
         super.onStop();
         terminalController.onStop();
-        Log.i(Config.APP_LOG_TAG, "onStop()");
-//        JNI.puts("onStop()");
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
         terminalController.onDestroy();
-        Log.i(Config.APP_LOG_TAG, "onDestroy()");
-//        JNI.puts("onDestroy()");
     }
 
     @Override

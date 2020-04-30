@@ -9,8 +9,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.res.AssetManager;
 import android.net.Uri;
-import android.os.Message;
-import android.os.RemoteException;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.ContextMenu;
@@ -68,6 +66,7 @@ public class TerminalController {
 
     AssetManager assetManager;
 
+    TerminalService mTermService;
     TerminalControllerService terminalControllerService;
 
 
@@ -192,18 +191,12 @@ public class TerminalController {
         terminalControllerService.terminalController = this;
 
         Intent serviceIntent = new Intent(terminalActivity, TerminalService.class);
-        serviceIntent.setPackage("alpine.term");
-
+        serviceIntent.putExtra("BINDING_TYPE", "BINDING_LOCAL");
         // Start the service and make it run regardless of who is bound to it:
         terminalActivity.startService(serviceIntent);
-
-        // Establish a connection with the service.  We use an explicit
-        // class name because there is no reason to be able to let other
-        // applications replace our component.
         if (!terminalActivity.bindService(serviceIntent, terminalControllerService, 0)) {
             throw new RuntimeException("bindService() failed");
         }
-        terminalControllerService.mIsBound = true;
 
         Button create_shell = terminalActivity.findViewById(R.id.create_new_shell);
         create_shell.setOnClickListener(new View.OnClickListener() {
@@ -242,25 +235,7 @@ public class TerminalController {
             mTermService.mSessionChangeCallback = null;
             mTermService = null;
         }
-        if (terminalControllerService.mIsBound) {
-            // If we have received the service, and hence registered with
-            // it, then now is the time to unregister.
-            if (terminalControllerService.mService != null) {
-                try {
-                    Message msg = Message.obtain(null,
-                        TerminalService.MSG_UNREGISTER_CLIENT);
-                    msg.replyTo = terminalControllerService.mMessenger;
-                    terminalControllerService.mService.send(msg);
-                } catch (RemoteException e) {
-                    // There is nothing special we need to do if the service
-                    // has crashed.
-                }
-            }
-
-            // Detach our existing connection.
-            activity.unbindService(terminalControllerService);
-            terminalControllerService.mIsBound = false;
-        }
+        activity.unbindService(terminalControllerService);
     }
 
     private static final int CONTEXTMENU_VNC_VIEWER = 0;
