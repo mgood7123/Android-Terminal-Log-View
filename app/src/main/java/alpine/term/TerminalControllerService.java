@@ -8,11 +8,18 @@ import android.content.ServiceConnection;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Typeface;
+import android.os.Handler;
+import android.os.HandlerThread;
 import android.os.IBinder;
+import android.os.Looper;
+import android.os.Message;
+import android.os.Messenger;
+import android.os.RemoteException;
 import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.TextUtils;
 import android.text.style.StyleSpan;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
@@ -35,70 +42,204 @@ public class TerminalControllerService implements ServiceConnection {
      */
     ArrayAdapter<TerminalSession> mListViewAdapter;
 
-    @Override
-    public void onServiceConnected(ComponentName componentName, IBinder service) {
-        terminalController.mTermService = ((TerminalService.LocalBinder) service).service;
+    /** Messenger for communicating with the service. */
+    Messenger mService = null;
 
-        terminalController.mTermService.mSessionChangeCallback = new TerminalSession.SessionChangedCallback() {
-            @Override
-            public void onTextChanged(TerminalSession changedSession) {
-                if (!terminalController.mIsVisible) return;
-                if (terminalController.mTerminalView.getCurrentSession() == changedSession) terminalController.mTerminalView.onScreenUpdated();
+    /** Flag indicating whether we have called bind on the service. */
+    public boolean mIsBound;
+    int SESSION_ID;
+
+    public void waitForReply() {
+        Log.e(Config.APP_LOG_TAG, "CLIENT: waiting for reply");
+        synchronized (waitOnMe) {
+            try {
+                waitOnMe.wait();
+            } catch (InterruptedException e) {
+                // we should have gotten our answer now.
             }
+        }
+        Log.e(Config.APP_LOG_TAG, "CLIENT: replied");
+    }
 
-            @Override
-            public void onTitleChanged(TerminalSession updatedSession) {
-                if (!terminalController.mIsVisible) return;
-                if (updatedSession != terminalController.mTerminalView.getCurrentSession()) {
-                    // Only show toast for other sessions than the current one, since the user
-                    // probably consciously caused the title change to change in the current session
-                    // and don't want an annoying toast for that.
-                    terminalController.showToast(terminalController.toToastTitle(updatedSession), false);
-                }
-                mListViewAdapter.notifyDataSetChanged();
-            }
+    // available for all threads somehow
+    final Object waitOnMe = new Object();
 
-            @Override
-            public void onSessionFinished(final TerminalSession finishedSession) {
-                // Needed for resetting font size on next application launch
-                // otherwise it will be reset only after force-closing.
-                if (terminalController.mTermService.getSessions().isEmpty()) {
-                    terminalController.currentFontSize = -1;
-                    if (terminalController.mTermService.mWantsToStop) {
-                        // The service wants to stop as soon as possible.
-                        terminalController.activity.finish();
-                        return;
+    boolean MSG_ARE_SESSIONS_EMPTY_RESULT;
+    boolean MSG_DOES_SERVER_WANT_TO_STOP_RESULT;
+
+    HandlerThread ht = new HandlerThread("threadName");
+    Looper looper;
+    Handler handler;
+    Handler.Callback callback = new Handler.Callback() {
+
+        @Override
+        public boolean handleMessage(Message msg) {
+            switch (msg.what) {
+                case TerminalService.MSG_REGISTERED_CLIENT:
+                    Log.e(Config.APP_LOG_TAG, "CLIENT: registered");
+                    sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
+                    break;
+                case TerminalService.MSG_CALLBACK_INVOKED:
+                    sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
+                case TerminalService.MSG_ARE_SESSIONS_EMPTY:
+                    MSG_ARE_SESSIONS_EMPTY_RESULT = TerminalService.toBoolean(msg.arg1);
+                    sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
+                    break;
+                case TerminalService.MSG_SESSION_CREATED: SESSION_ID = msg.arg1;
+                    sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
+                    break;
+                case TerminalService.MSG_DOES_SERVER_WANT_TO_STOP:
+                    MSG_DOES_SERVER_WANT_TO_STOP_RESULT = TerminalService.toBoolean(msg.arg1);
+                    sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
+                    break;
+                case TerminalService.MSG_ON_TEXT_CHANGED:
+                    if (!terminalController.mIsVisible) break;
+                    if (terminalController.mTerminalView.getCurrentSession() == changedSession) terminalController.mTerminalView.onScreenUpdated();
+                    sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
+                    break;
+                case TerminalService.MSG_ON_TITLE_CHANGED:
+                    if (!terminalController.mIsVisible) break;
+                    if (updatedSession != terminalController.mTerminalView.getCurrentSession()) {
+                        // Only show toast for other sessions than the current one, since the user
+                        // probably consciously caused the title change to change in the current session
+                        // and don't want an annoying toast for that.
+                        terminalController.showToast(terminalController.toToastTitle(updatedSession), false);
                     }
+                    mListViewAdapter.notifyDataSetChanged();
+                    sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
+                    break;
+                case TerminalService.MSG_ON_SESSION_FINISHED:
+                    // hopefully this works?
+                    new Thread("") {
+                        @Override
+                        public void run() {
+                            waitForReply();
+                            sendMessageToServer(TerminalService.MSG_ARE_SESSIONS_EMPTY);
+                            // Needed for resetting font size on next application launch
+                            // otherwise it will be reset only after force-closing.
+                            if (MSG_ARE_SESSIONS_EMPTY_RESULT) {
+                                terminalController.currentFontSize = -1;
+                                sendMessageToServer(TerminalService.MSG_DOES_SERVER_WANT_TO_STOP);
+                                if (MSG_DOES_SERVER_WANT_TO_STOP_RESULT) {
+                                    // The service wants to stop as soon as possible.
+                                    terminalController.activity.finish();
+                                    return;
+                                }
+                                sendMessageToServer(TerminalService.MSG_TERMINATE);
+                            } else {
+                                terminalController.switchToPreviousSession();
+                                sendMessageToServer(TerminalService.MSG_REMOVE_SESSION, finishedSession);
+                            }
+                        }
+                    }.start();
+                    sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
+                    break;
+                case TerminalService.MSG_ON_CLIPBOARD_TEXT:
+                    if (!terminalController.mIsVisible) break;
+                    ClipboardManager clipboard = (ClipboardManager) terminalController.activity.getSystemService(Context.CLIPBOARD_SERVICE);
+                    if (clipboard != null) clipboard.setPrimaryClip(new ClipData(null, new String[]{"text/plain"}, new ClipData.Item(text)));
+                    sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
+                    break;
+                case TerminalService.MSG_ON_BELL:
+                    if (!terminalController.mIsVisible) break;
 
-                    terminalController.mTermService.terminateService();
-                } else {
-                    terminalController.switchToPreviousSession();
-                    terminalController.mTermService.removeSession(finishedSession);
-                }
+                    Bell.getInstance(terminalController.activity).doBell();
+                    sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
+                    break;
+
+                case TerminalService.MSG_ON_COLORS_CHANGED:
+                    if (terminalController.mTerminalView.getCurrentSession() == changedSession)
+                        terminalController.updateBackgroundColor();
+                    sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
+                    break;
+                default:
+                    sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
+                    break;
             }
-
-            @Override
-            public void onClipboardText(TerminalSession session, String text) {
-                if (!terminalController.mIsVisible) return;
-                ClipboardManager clipboard = (ClipboardManager) terminalController.activity.getSystemService(Context.CLIPBOARD_SERVICE);
-                if (clipboard != null) clipboard.setPrimaryClip(new ClipData(null, new String[]{"text/plain"}, new ClipData.Item(text)));
+            // handled messages are handled in background thread
+            // then notify about finished message.
+            synchronized (waitOnMe) {
+                waitOnMe.notifyAll();
             }
+            return true;
+        }
+    };
 
-            @Override
-            public void onBell(TerminalSession session) {
-                if (!terminalController.mIsVisible) {
-                    return;
-                }
+    public boolean sendMessageToServer(int what) {
+        sendMessageToServer(null, what, 0, 0, null);
+    }
 
-                Bell.getInstance(terminalController.activity).doBell();
-            }
+    private boolean sendMessageToServer(int what, int arg1) {
+        sendMessageToServer(null, what, arg1, 0, null);
+    }
 
-            @Override
-            public void onColorsChanged(TerminalSession changedSession) {
-                if (terminalController.mTerminalView.getCurrentSession() == changedSession)
-                    terminalController.updateBackgroundColor();
-            }
-        };
+    private boolean sendMessageToServer(int what, int arg1, int arg2) {
+        return sendMessageToServer(null, what, arg1, arg2, null);
+    }
+
+    public boolean sendMessageToServer(int what, Object obj) {
+        return sendMessageToServer(null, what, 0, 0, obj);
+    }
+
+    private boolean sendMessageToServer(int what, int arg1, Object obj) {
+        return sendMessageToServer(null, what, arg1, 0, obj);
+    }
+
+    private boolean sendMessageToServer(int what, int arg1, int arg2, Object obj) {
+        return sendMessageToServer(null, what, arg1, arg2, obj);
+    }
+
+    public boolean sendMessageToServer(Handler handler, int what, int arg1, int arg2, Object obj) {
+        try {
+            Message msg = Message.obtain(handler, what, arg1, arg2, obj);
+            msg.replyTo = mMessenger;
+            mService.send(msg);
+            waitForReply();
+            return true;
+        } catch (RemoteException e) {
+            // In this case the service has crashed before we could even
+            // do anything with it
+            return false;
+        }
+    }
+
+    public boolean sendMessageToServerNonBlocking(int what) {
+        try {
+            Message msg = Message.obtain(null,
+                what);
+            msg.replyTo = mMessenger;
+            mService.send(msg);
+            return true;
+        } catch (RemoteException e) {
+            // In this case the service has crashed before we could even
+            // do anything with it
+            return false;
+        }
+    }
+
+    /**
+     * Target we publish for clients to send messages to IncomingHandler.
+     */
+    Messenger mMessenger;
+
+    @Override
+    public void onServiceConnected(ComponentName componentName, IBinder boundService) {
+        Log.e(Config.APP_LOG_TAG, "onServiceConnected() has been called");
+        mService = new Messenger(boundService);
+        if (ht.getState() == Thread.State.NEW) {
+            ht.start();
+            looper = ht.getLooper();
+            handler = new Handler(looper, callback);
+            mMessenger = new Messenger(handler);
+        }
+
+        // We want to monitor the service for as long as we are
+        // connected to it.
+        Log.e(Config.APP_LOG_TAG, "CLIENT: registering");
+        sendMessageToServer(TerminalService.MSG_REGISTER_CLIENT);
+
+        // TODO: IMPLEMENT IPC CALLBACKS
+        //  when server recieves command, do callback associated with command
 
         mListViewAdapter = new ArrayAdapter<TerminalSession>(terminalController.activity, R.layout.line_in_drawer, terminalController.mTermService.getSessions()) {
             final StyleSpan boldSpan = new StyleSpan(Typeface.BOLD);
@@ -194,7 +335,8 @@ public class TerminalControllerService implements ServiceConnection {
             terminalController.getDrawer().closeDrawers();
         });
 
-        if (terminalController.mTermService.getSessions().isEmpty()) {
+        sendMessageToServer(TerminalService.MSG_ARE_SESSIONS_EMPTY);
+        if (MSG_ARE_SESSIONS_EMPTY_RESULT) {
             if (terminalController.mIsVisible) {
                 TerminalSession log = createLog();
                 createLogcat();
@@ -216,16 +358,19 @@ public class TerminalControllerService implements ServiceConnection {
 
     public TerminalSession getCurrentSession() {
         return
-            terminalController.mTermService == null
+            !sendMessageToServer(TerminalService.MSG_IS_SERVER_ALIVE)
                 ? null : terminalController.mTerminalView.getCurrentSession();
     }
 
     public TerminalSession createLog() {
-        if (terminalController.mTermService == null) return null;
-        TerminalSession session;
+        if (!sendMessageToServer(TerminalService.MSG_IS_SERVER_ALIVE)) return null;
         TerminalSession currentSession = terminalController.mTerminalView.getCurrentSession();
 
-        session = terminalController.mTermService.createShellSession(true);
+        sendMessageToServer(TerminalService.MSG_CREATE_SHELL_SESSION, TerminalService.toInt(true));
+
+        // this will data race due to multi threading
+        int session_id = SESSION_ID;
+        sendMessageToServer(TerminalService.MSG_ATTACH_SESSION, SESSION_ID);
         terminalController.mTerminalView.attachSession(session);
 
         int logPid;

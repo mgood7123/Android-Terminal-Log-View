@@ -259,7 +259,6 @@ public final class TerminalView extends View {
         if (session == mTermSession) return false;
         mTopRow = 0;
 
-        mTermSession = session;
         mEmulator = null;
         mCombiningAccent = 0;
 

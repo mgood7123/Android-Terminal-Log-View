@@ -310,6 +310,7 @@ public final class TerminalSession extends TerminalOutput {
             public void run() {
                 try (InputStream termIn = new FileInputStream(terminalFileDescriptorWrapped)) {
                     final byte[] buffer = new byte[4096];
+                    // TODO add non coloured file with terminal escape sequences removed
                     File log = new File(Config.getDataDirectory(context) + "/logcat.txt");
                     if (!log.exists()) log.createNewFile();
                     if (!log.canRead()) log.setReadable(true);
