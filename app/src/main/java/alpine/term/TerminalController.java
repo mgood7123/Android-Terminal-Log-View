@@ -32,8 +32,12 @@ import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.viewpager.widget.PagerAdapter;
 import androidx.viewpager.widget.ViewPager;
 
+import java.io.File;
+import java.io.FileDescriptor;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.attribute.FileOwnerAttributeView;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -754,5 +758,9 @@ public class TerminalController {
 
     public DrawerLayout getDrawer() {
         return (DrawerLayout) activity.findViewById(R.id.drawer_layout);
+    }
+
+    public static int createPseudoTerminal() {
+        return JNI.createPseudoTerminal(false);
     }
 }

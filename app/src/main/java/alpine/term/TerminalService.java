@@ -455,7 +455,7 @@ public class TerminalService extends Service implements SessionChangedCallback {
      * @param isLogView     if this is true then this is converted into a LogView instead of a Shell
      * @return              a created terminal session that can be attached to TerminalView.
      */
-    public TerminalSession createShellSession(boolean isLogView, TrackedActivity activity) {
+    public TerminalSession createShellSession(boolean isLogView, TrackedActivity activity, boolean printWelcomeMessage) {
         ArrayList<String> environment = new ArrayList<>();
         Context appContext = getApplicationContext();
 
@@ -475,7 +475,7 @@ public class TerminalService extends Service implements SessionChangedCallback {
 
         Log.i(Config.APP_LOG_TAG, "initiating sh session with following arguments: " + processArgs.toString());
 
-        TerminalSession session = new TerminalSession(isLogView, "/bin/sh", processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this, activity);
+        TerminalSession session = new TerminalSession(isLogView, "/bin/sh", processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this, activity, printWelcomeMessage);
         mTerminalSessions.add(session);
         updateNotification();
         return session;
@@ -508,7 +508,7 @@ public class TerminalService extends Service implements SessionChangedCallback {
 
         Log.i(Config.APP_LOG_TAG, "initiating sh session with following arguments: " + processArgs.toString());
 
-        TerminalSession session = new TerminalSession(true, "/bin/logcat", processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this, activity);
+        TerminalSession session = new TerminalSession(true, "/bin/logcat", processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this, activity, false);
         mTerminalSessions.add(session);
         updateNotification();
         return session;

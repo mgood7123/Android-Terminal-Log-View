@@ -47,8 +47,6 @@ public final class JNI {
      */
     public static native int createSubprocess(String cmd, String cwd, String[] args, String[] envVars, int[] processId, int rows, int columns);
 
-    public static native int createLog(String cmd, String cwd, String[] args, String[] envVars, int[] processId, int rows, int columns, int pid);
-
     /** Set the window size for a given pty, which allows connected programs to learn how large their screen is. */
     public static native void setPtyWindowSize(int fd, int rows, int cols);
 
@@ -66,4 +64,6 @@ public final class JNI {
     public static native void puts(String fmt);
 
     public static native int getPid();
+
+    public static native int createPseudoTerminal(boolean printWelcomeMessage);
 }

@@ -46,6 +46,8 @@ import java.util.UUID;
 import alpine.term.Config;
 import alpine.term.TrackedActivity;
 
+import static alpine.term.TrackedActivity.wrapFileDescriptor;
+
 /**
  * A terminal session, consisting of a process coupled to a terminal interface.
  * <p>
@@ -73,25 +75,6 @@ public final class TerminalSession extends TerminalOutput {
 
         void onColorsChanged(TerminalSession session);
 
-    }
-
-    private static FileDescriptor wrapFileDescriptor(int fileDescriptor) {
-        FileDescriptor result = new FileDescriptor();
-        try {
-            Field descriptorField;
-            try {
-                descriptorField = FileDescriptor.class.getDeclaredField("descriptor");
-            } catch (NoSuchFieldException e) {
-                // For desktop java:
-                descriptorField = FileDescriptor.class.getDeclaredField("fd");
-            }
-            descriptorField.setAccessible(true);
-            descriptorField.set(result, fileDescriptor);
-        } catch (NoSuchFieldException | IllegalAccessException | IllegalArgumentException e) {
-            Log.wtf(EmulatorDebug.LOG_TAG, "error accessing FileDescriptor#descriptor private field", e);
-            System.exit(1);
-        }
-        return result;
     }
 
     private static final int MSG_NEW_INPUT = 1;
@@ -172,8 +155,9 @@ public final class TerminalSession extends TerminalOutput {
     private final String mCwd;
     private final boolean isLogView;
     private final TrackedActivity activity;
+    private final boolean printWelcomeMessage;
 
-    public TerminalSession(boolean isLogView, String shellPath, String[] args, String[] env, String cwd, SessionChangedCallback changeCallback, TrackedActivity activity) {
+    public TerminalSession(boolean isLogView, String shellPath, String[] args, String[] env, String cwd, SessionChangedCallback changeCallback, TrackedActivity activity, boolean printWelcomeMessage) {
         mChangeCallback = changeCallback;
 
         this.activity = activity;
@@ -182,6 +166,7 @@ public final class TerminalSession extends TerminalOutput {
         this.mArgs = args;
         this.mEnv = env;
         this.mCwd = cwd;
+        this.printWelcomeMessage = printWelcomeMessage;
     }
 
     /** Inform the attached pty of the new size and reflow or initialize the emulator. */
@@ -223,6 +208,7 @@ public final class TerminalSession extends TerminalOutput {
         Log.w(EmulatorDebug.LOG_TAG, "created shell");
 
         final FileDescriptor terminalFileDescriptorWrapped = wrapFileDescriptor(mTerminalFileDescriptor);
+        if (terminalFileDescriptorWrapped == null) throw new NullPointerException();
 
         new Thread("TermSessionInputReader (stdout/stderr) [pid=" + mShellPid + "]") {
             @Override
@@ -259,13 +245,22 @@ public final class TerminalSession extends TerminalOutput {
         int pid = -1;
         if (activity != null) pid = activity.pid;
         Log.w(EmulatorDebug.LOG_TAG, "creating log");
-        int[] processId = new int[1];
-        mTerminalFileDescriptor = JNI.createLog(mShellPath, mCwd, mArgs, mEnv, processId, rows, columns, pid);
-        mShellPid = processId[0];
+        final FileDescriptor terminalFileDescriptorWrapped;
+        if (activity == null) {
+            Log.w(EmulatorDebug.LOG_TAG, "creating new FileDescriptor");
+            terminalFileDescriptorWrapped = wrapFileDescriptor(JNI.createPseudoTerminal(printWelcomeMessage));
+            mShellPid = JNI.getPid();
+        } else {
+            Log.w(EmulatorDebug.LOG_TAG, "using existing FileDescriptor");
+            if (activity.pseudoTerminal == null) {
+                Log.wtf(EmulatorDebug.LOG_TAG, "SERVER: ERROR: activity.pseudoTerminal IS NULL");
+            }
+            terminalFileDescriptorWrapped = activity.getJavaFileDescriptor();
+            mShellPid = activity.pid;
+        }
+        if (terminalFileDescriptorWrapped == null) throw new NullPointerException();
         JNI.puts("created log");
         Log.w(EmulatorDebug.LOG_TAG, "created log");
-
-        final FileDescriptor terminalFileDescriptorWrapped = wrapFileDescriptor(mTerminalFileDescriptor);
 
         new Thread("TermSessionInputReader (stdout/stderr) [log (pid=" + mShellPid + ")]") {
             @Override
@@ -309,6 +304,7 @@ public final class TerminalSession extends TerminalOutput {
         Log.w(EmulatorDebug.LOG_TAG, "created Logcat");
 
         final FileDescriptor terminalFileDescriptorWrapped = wrapFileDescriptor(mTerminalFileDescriptor);
+        if (terminalFileDescriptorWrapped == null) throw new NullPointerException();
 
         new Thread("TermSessionInputReader (stdout/stderr) [Logcat (pid=" + mShellPid + ")]") {
             @Override
