@@ -266,7 +266,7 @@ public final class TerminalSession extends TerminalOutput {
             @Override
             public void run() {
                 try (InputStream termIn = new FileInputStream(terminalFileDescriptorWrapped)) {
-                    final char[] buffer = new char[1];
+                    final byte[] buffer = new byte[4096];
                     File log = new File(Config.getDataDirectory(context) + "/native_log.txt");
                     if (!log.exists()) log.createNewFile();
                     if (!log.canRead()) log.setReadable(true);
@@ -274,22 +274,18 @@ public final class TerminalSession extends TerminalOutput {
                     FileOutputStream logFile = new FileOutputStream(log);
                     FileDescriptor logFileFileDescriptor = logFile.getFD();
                     while (true) {
-                        int r = JNI.read(mTerminalFileDescriptor, buffer, 1);
-                        if (r == -1) {
+                        int read = termIn.read(buffer);
+                        if (read == -1) {
                             Log.wtf(EmulatorDebug.LOG_TAG, "stdout/stderr reader return -1");
                             return;
                         }
-                        if (r != 0) {
-                            byte[] b = new byte[1];
-                            b[0] = (byte) buffer[0];
-                            logFile.write(b, 0, r);
-                            logFileFileDescriptor.sync();
-                            if (!mProcessToTerminalIOQueue.write(b, 0, r)) {
-                                Log.wtf(EmulatorDebug.LOG_TAG, "stdout/stderr reader [write] returned false (closed)");
-                                return;
-                            }
-                            mMainThreadHandler.sendEmptyMessage(MSG_NEW_INPUT);
+                        logFile.write(buffer, 0, read);
+                        logFileFileDescriptor.sync();
+                        if (!mProcessToTerminalIOQueue.write(buffer, 0, read)) {
+                            Log.wtf(EmulatorDebug.LOG_TAG, "stdout/stderr reader [write] returned false (closed)");
+                            return;
                         }
+                        mMainThreadHandler.sendEmptyMessage(MSG_NEW_INPUT);
                     }
                 } catch (Exception e) {
                     // Ignore, just shutting down.
