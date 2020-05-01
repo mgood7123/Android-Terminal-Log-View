@@ -191,6 +191,7 @@ public class TerminalController {
         terminalControllerService.terminalController = this;
 
         Intent serviceIntent = new Intent(terminalActivity, TerminalService.class);
+        serviceIntent.putExtra("BINDING_TYPE", "BINDING_LOCAL");
         // Start the service and make it run regardless of who is bound to it:
         terminalActivity.startService(serviceIntent);
         if (!terminalActivity.bindService(serviceIntent, terminalControllerService, 0)) {

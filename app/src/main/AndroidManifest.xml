@@ -1,9 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     package="alpine.term"
     android:installLocation="internalOnly">
 
-    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.INTERNET" />
@@ -11,50 +14,70 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application
-        android:extractNativeLibs="true"
         android:allowBackup="false"
-        android:icon="@mipmap/ic_launcher"
-        android:roundIcon="@mipmap/ic_launcher_round"
         android:banner="@drawable/banner"
+        android:extractNativeLibs="true"
+        android:icon="@mipmap/ic_launcher"
         android:label="@string/application_name"
-        android:theme="@style/Theme.AppCompat.DayNight.DarkActionBar"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="false"
+        android:theme="@style/Theme.AppCompat.DayNight.DarkActionBar"
         tools:ignore="GoogleAppIndexingWarning">
+        <activity android:name=".Main2Activity"
+            android:label="ALPINE"
+            >
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
 
-        <!-- This (or rather, value 2.1 or higher) is needed to make the Samsung Galaxy S8
-             mark the app with "This app is optimized to run in full screen." -->
-        <meta-data android:name="android.max_aspect" android:value="10.0" />
-
-        <meta-data android:name="com.sec.android.support.multiwindow" android:value="true" />
-        <meta-data android:name="com.samsung.android.multidisplay.keep_process_alive" android:value="true"/>
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <!--
+         This (or rather, value 2.1 or higher) is needed to make the Samsung Galaxy S8
+             mark the app with "This app is optimized to run in full screen."
+        -->
+        <meta-data
+            android:name="android.max_aspect"
+            android:value="10.0" />
+        <meta-data
+            android:name="com.sec.android.support.multiwindow"
+            android:value="true" />
+        <meta-data
+            android:name="com.samsung.android.multidisplay.keep_process_alive"
+            android:value="true" />
 
         <activity
             android:name=".TerminalActivity"
-            android:label="@string/application_name"
+            android:process=":TerminalService"
             android:configChanges="orientation|screenSize|smallestScreenSize|density|screenLayout|uiMode|keyboard|keyboardHidden|navigation"
+            android:label="@string/application_name"
             android:launchMode="singleTask"
             android:resizeableActivity="true"
-            android:windowSoftInputMode="adjustResize" >
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
+
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
+
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
-
         <activity
             android:name=".HelpActivity"
+            android:process=":TerminalService"
             android:exported="false"
-            android:theme="@android:style/Theme.Material.Light.DarkActionBar"
+            android:label="@string/application_name"
             android:parentActivityName=".TerminalActivity"
             android:resizeableActivity="true"
-            android:label="@string/application_name" />
+            android:theme="@android:style/Theme.Material.Light.DarkActionBar" />
 
         <service
             android:name=".TerminalService"
+            android:process=":TerminalService"
             android:exported="false" />
     </application>
+
 </manifest>

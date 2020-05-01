@@ -214,7 +214,7 @@ JNIEXPORT jint JNICALL Java_alpine_term_emulator_JNI_createSubprocess(
 
 static int create_log(JNIEnv* env,
                              jint rows,
-                             jint columns)
+                             jint columns, int pid)
 {
     LOGV("opening ptmx (master) device");
     int ptm = open("/dev/ptmx", O_RDWR | O_CLOEXEC);
@@ -258,29 +258,45 @@ static int create_log(JNIEnv* env,
     LOGV("opened %s (slave) device: %d", devname, pts);
     if (pts < 0) exit(-1);
 
-    LOGV("duping current stdin (fd 0), stdout (fd 1), and stderr (fd 2) to %s (slave) device: %d", devname, pts);
 
-    dup2(pts, 0);
-    dup2(pts, 1);
-    dup2(pts, 2);
+    if (pid == -1) {
+        LOGV("duping current stdin (fd 0), stdout (fd 1), and stderr (fd 2) to %s (slave) device: %d", devname, pts);
+        dup2(pts, 0);
+        dup2(pts, 1);
+        dup2(pts, 2);
+        puts("Welcome to the Android Terminal Log\n");
 
-    puts("Welcome to the Android Terminal Log\n");
+        puts("To view a demonstration long press on the screen");
+        puts("tap \"More...\"");
+        puts("tap \"printf something to the terminal");
+        puts("\nBy default this invokes the following C/C++ code:\n");
+        puts("    printf(\"HELLO FROM NATIVE CPP\\n\");\n");
+        puts("like a terminal, output is sent by printing a new line");
+        puts("so if no output appears, try putting a new line in your printing function");
+        puts("\nNow printing logging info:\n");
 
-    puts("To view a demonstration long press on the screen");
-    puts("tap \"More...\"");
-    puts("tap \"printf something to the terminal");
-    puts("\nBy default this invokes the following C/C++ code:\n");
-    puts("    printf(\"HELLO FROM NATIVE CPP\\n\");\n");
-    puts("like a terminal, output is sent by printing a new line");
-    puts("so if no output appears, try putting a new line in your printing function");
-    puts("\nNow printing logging info:\n");
-
-    printf("opening ptmx (master) device\n");
-    printf("opened ptmx (master) device: %d\n", ptm);
-    printf("opening %s (slave) device\n", devname);
-    printf("opened %s (slave) device: %d\n", devname, pts);
-    printf("duping current stdin (fd 0), stdout (fd 1), and stderr (fd 2) to %s (slave) device: %d\n", devname, pts);
-    printf("returning ptmx (master) device: %d\n", ptm);
+        printf("opening ptmx (master) device\n");
+        printf("opened ptmx (master) device: %d\n", ptm);
+        printf("opening %s (slave) device\n", devname);
+        printf("opened %s (slave) device: %d\n", devname, pts);
+        printf("duping current stdin (fd 0), stdout (fd 1), and stderr (fd 2) to %s (slave) device: %d\n", devname, pts);
+        printf("returning ptmx (master) device: %d\n", ptm);
+    } else {
+        // duplicate file descriptors of external process
+        char fd0[37];  // actual maximal length: 37 for 64bit systems
+        snprintf(fd0, sizeof(fd0), "/proc/%d/fd/%d", pid, 0);
+        char fd1[37];  // actual maximal length: 37 for 64bit systems
+        snprintf(fd1, sizeof(fd1), "/proc/%d/fd/%d", pid, 1);
+        char fd2[37];  // actual maximal length: 37 for 64bit systems
+        snprintf(fd2, sizeof(fd2), "/proc/%d/fd/%d", pid, 2);
+        LOGV("duping stdin (%s), stdout (%s), and stderr (%s) to %s (slave) device: %d", fd0, fd1, fd2, devname, pts);
+        int new_fd0 = open(fd0, O_RDWR);
+        dup2(pts, new_fd0);
+        int new_fd1 = open(fd1, O_RDWR);
+        dup2(pts, new_fd1);
+        int new_fd2 = open(fd2, O_RDWR);
+        dup2(pts, new_fd2);
+    }
     LOGV("returning ptmx (master) device: %d\n", ptm);
     return ptm;
 }
@@ -294,7 +310,8 @@ JNIEXPORT jint JNICALL Java_alpine_term_emulator_JNI_createLog(
     jobjectArray envVars,
     jintArray processIdArray,
     jint rows,
-    jint columns)
+    jint columns,
+    jint pid)
 {
     jsize size = args ? (*env)->GetArrayLength(env, args) : 0;
     char** argv = NULL;
@@ -329,7 +346,7 @@ JNIEXPORT jint JNICALL Java_alpine_term_emulator_JNI_createLog(
     char const* cmd_cwd = (*env)->GetStringUTFChars(env, cwd, NULL);
     char const* cmd_utf8 = (*env)->GetStringUTFChars(env, cmd, NULL);
     LOGV("obtaining ptmx (master) device\n");
-    int ptm = create_log(env, rows, columns);
+    int ptm = create_log(env, rows, columns, pid);
     printf("obtained ptmx (master) device: %d\n", ptm);
     LOGV("obtained ptmx (master) device: %d\n", ptm);
     (*env)->ReleaseStringUTFChars(env, cmd, cmd_utf8);
@@ -347,7 +364,8 @@ JNIEXPORT jint JNICALL Java_alpine_term_emulator_JNI_createLog(
     int* pProcId = (int*) (*env)->GetPrimitiveArrayCritical(env, processIdArray, NULL);
     if (!pProcId) return throw_runtime_exception(env, "JNI call GetPrimitiveArrayCritical(processIdArray, &isCopy) failed");
 
-    *pProcId = getpid();
+    if (pid == -1) *pProcId = getpid();
+    else *pProcId = pid;
     (*env)->ReleasePrimitiveArrayCritical(env, processIdArray, pProcId, 0);
 
     return ptm;
