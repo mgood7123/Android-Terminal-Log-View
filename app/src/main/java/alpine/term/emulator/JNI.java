@@ -66,4 +66,6 @@ public final class JNI {
     public static native void puts(String fmt);
 
     public static native int getPid();
+
+    public static native int read(int fileDescriptor, char[] buffer, int bytesToRead);
 }

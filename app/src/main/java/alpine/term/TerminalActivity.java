@@ -33,6 +33,8 @@ import android.widget.Button;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 
+import alpine.term.emulator.JNI;
+
 /**
  * A terminal emulator activity.
  * <p/>
@@ -115,6 +117,7 @@ public final class TerminalActivity extends Activity {
     protected void onStart() {
         super.onStart();
         terminalController.onStart();
+//        JNI.test_puts();
     }
 
     @Override

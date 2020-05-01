@@ -32,6 +32,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <termios.h>
 #include <unistd.h>
 #include <android/log.h>
+#include <stdbool.h>
 
 #ifndef MODULE_NAME
 #define MODULE_NAME  "TERMINAL"
@@ -212,14 +213,15 @@ JNIEXPORT jint JNICALL Java_alpine_term_emulator_JNI_createSubprocess(
     return ptm;
 }
 
-static int create_log(JNIEnv* env,
+static int create_log(JNIEnv* ALPINE_TERM_UNUSED(env),
                              jint rows,
                              jint columns)
 {
-    LOGV("opening ptmx (master) device");
     int ptm = open("/dev/ptmx", O_RDWR | O_CLOEXEC);
-    LOGV("opened ptmx (master) device: %d", ptm);
-    if (ptm < 0) return throw_runtime_exception(env, "Cannot open /dev/ptmx");
+    if (ptm < 0) {
+        puts("Cannot open /dev/ptmx");
+        return -1;
+    }
 
 #ifdef LACKS_PTSNAME_R
     char* devname;
@@ -228,12 +230,13 @@ static int create_log(JNIEnv* env,
 #endif
     if (grantpt(ptm) || unlockpt(ptm) ||
         #ifdef LACKS_PTSNAME_R
-            (devname = ptsname(ptm)) == NULL
+        (devname = ptsname(ptm)) == NULL
         #else
-            ptsname_r(ptm, devname, sizeof(devname))
-        #endif
+        ptsname_r(ptm, devname, sizeof(devname))
+#endif
         ) {
-        return throw_runtime_exception(env, "Cannot grantpt()/unlockpt()/ptsname_r() on /dev/ptmx");
+        puts("Cannot grantpt()/unlockpt()/ptsname_r() on /dev/ptmx");
+        return -1;
     }
 
     // Enable UTF-8 mode.
@@ -250,19 +253,35 @@ static int create_log(JNIEnv* env,
     sigset_t signals_to_unblock;
     sigfillset(&signals_to_unblock);
     sigprocmask(SIG_UNBLOCK, &signals_to_unblock, 0);
-
     setsid();
 
-    LOGV("opening %s (slave) device", devname);
     int pts = open(devname, O_RDWR);
-    LOGV("opened %s (slave) device: %d", devname, pts);
-    if (pts < 0) exit(-1);
+    if (pts < 0) {
+        puts("failed to open slave device belonging to /dev/ptmx");
+        return -1;
+    }
 
-    LOGV("duping current stdin (fd 0), stdout (fd 1), and stderr (fd 2) to %s (slave) device: %d", devname, pts);
+    /*
+why does this happen? this is what i have in my android JNI library, https://ghostbin.co/paste/hf94o , and this is what i have in my C application https://ghostbin.co/paste/gkdgh which works fine when compiled in termux and mac and when ran in adb shell
 
-    dup2(pts, 0);
-    dup2(pts, 1);
-    dup2(pts, 2);
+in which printing to stdout before duping, in the JNI library, seems to break stdout, where as in termux, adb shell, and others, it does not break stdout
+     */
+
+    fprintf(stdout, "i have put data into stdout, but i have not put data into stderr");
+
+    int ri = dup2(pts, 0);
+    LOGV("dup2(pts, 0) returned %d", ri);
+    int ro = dup2(pts, 1);
+    LOGV("dup2(pts, 1) returned %d", ro);
+    int re = dup2(pts, 2);
+    LOGV("dup2(pts, 2) returned %d", re);
+
+    int w = write(1, "something\n", strlen("something\n"));
+    LOGV("write(1, \"something\\n\", strlen(\"something\\n\")+1) returned %d", w);
+    int fp = fprintf(stdout, "something\n");
+    LOGV("fprintf(stdout, \"something\\n\") returned %d", fp);
+//    fprintf(stdout, "print to stdout\n");
+//    fprintf(stderr, "print to stderr\n");
 
     puts("Welcome to the Android Terminal Log\n");
 
@@ -279,9 +298,34 @@ static int create_log(JNIEnv* env,
     printf("opened ptmx (master) device: %d\n", ptm);
     printf("opening %s (slave) device\n", devname);
     printf("opened %s (slave) device: %d\n", devname, pts);
-    printf("duping current stdin (fd 0), stdout (fd 1), and stderr (fd 2) to %s (slave) device: %d\n", devname, pts);
+    printf(
+        "duping current stdin (fd 0), stdout (fd 1), and stderr (fd 2) to %s (slave) device: %d\n",
+        devname, pts);
     printf("returning ptmx (master) device: %d\n", ptm);
-    LOGV("returning ptmx (master) device: %d\n", ptm);
+    puts("press ctrl+c to exit...");
+    puts("now printing buffers from ptm device...");
+
+    // now... read from ptm...
+    // this will be difficult due to this process's stdout being redirected to the pts
+    // so we shall write the output to a file instead
+
+    char ch[1];
+    bool newLine = true;
+    while(1) {
+        int r = read(ptm, ch, 1);
+        LOGW("r = %d", r);
+        if (r != -1 && r != 0) {
+            if (newLine) {
+                LOGE("r = %d, ptm buffer: ", r);
+                newLine = false;
+            }
+            if (ch[0] == '\n') {
+                newLine = true;
+            } else {
+                LOGE("%c", ch[0]);
+            }
+        }
+    }
     return ptm;
 }
 
@@ -401,4 +445,29 @@ JNIEXPORT void JNICALL Java_alpine_term_emulator_JNI_puts(JNIEnv * ALPINE_TERM_U
 JNIEXPORT jint JNICALL
 Java_alpine_term_emulator_JNI_getPid(JNIEnv *ALPINE_TERM_UNUSED(env), jclass ALPINE_TERM_UNUSED(clazz)) {
     return getpid();
+}
+
+JNIEXPORT jint JNICALL
+Java_alpine_term_emulator_JNI_read(
+    JNIEnv * env,
+    jclass ALPINE_TERM_UNUSED(clazz),
+    jint file_descriptor,
+    jcharArray buffer,
+    jint bytes_to_read
+) {
+    char ch[1];
+    int bytesRead = read(file_descriptor, ch, (size_t) bytes_to_read);
+    LOGE("bytes read: %d", bytesRead);
+
+    char* buffer_ = (char*) (*env)->GetPrimitiveArrayCritical(env, buffer, NULL);
+    if (!buffer_) return throw_runtime_exception(env, "JNI call GetPrimitiveArrayCritical(processIdArray, &isCopy) failed");
+
+    if (bytesRead != -1 && bytesRead != 0) {
+        for (int i = 0; i != bytes_to_read+1; i++) {
+            LOGE("READ BYTE: %c", ch[i]);
+            buffer_[i] = ch[i];
+        }
+    }
+    (*env)->ReleasePrimitiveArrayCritical(env, buffer, buffer_, 0);
+    return bytesRead;
 }
