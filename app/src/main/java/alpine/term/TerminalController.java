@@ -462,10 +462,18 @@ public class TerminalController {
             leftDrawerList.setItemChecked(indexOfSession, true);
             leftDrawerList.smoothScrollToPosition(indexOfSession);
 
+            boolean targetVisibility = mSettings.isExtraKeysEnabled();
+            boolean actualvisibility = viewPager.getVisibility() == View.VISIBLE;
+            Log.e(Config.APP_LOG_TAG, "targetVisibility visibility = " + targetVisibility);
+            Log.e(Config.APP_LOG_TAG, "actual visibility = " + actualvisibility);
+
             if (session.isShell()) {
-                if (mSettings.isExtraKeysEnabled()) viewPager.setVisibility(View.VISIBLE);
+                if (targetVisibility == true)
+                    if (actualvisibility == false)
+                        viewPager.setVisibility(View.VISIBLE);
             } else {
-                if (mSettings.isExtraKeysEnabled()) viewPager.setVisibility(View.GONE);
+                // keys should not be displayed in log
+                viewPager.setVisibility(View.GONE);
             }
 
             showToast(toToastTitle(session), false);
