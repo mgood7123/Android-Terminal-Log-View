@@ -20,15 +20,12 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.Message;
 import android.os.Messenger;
-import android.os.Parcel;
-import android.os.ParcelFileDescriptor;
 import android.os.RemoteException;
 import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.TextUtils;
 import android.text.style.StyleSpan;
 import android.util.Log;
-import android.util.Pair;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
@@ -37,8 +34,6 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 
-import java.io.FileDescriptor;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Locale;
 
@@ -235,11 +230,12 @@ public class TerminalControllerService implements ServiceConnection {
         if (boundService instanceof TerminalService.LocalBinder) {
             TerminalService.LocalBinder b = (TerminalService.LocalBinder) boundService;
             terminalController.mTermService = b.service;
-            Log.e(Config.APP_LOG_TAG, "CLIENT: CREATED LOCAL SERVICE");
+            terminalController.mTermService.terminalControllerService = this;
+            Log.e(Config.APP_LOG_TAG, "CLIENT: BINDED TO LOCAL SERVICE");
             isLocalService = true;
         } else {
             mService = new Messenger(boundService);
-            Log.e(Config.APP_LOG_TAG, "CLIENT: CREATED REMOTE SERVICE");
+            Log.e(Config.APP_LOG_TAG, "CLIENT: BINDED TO REMOTE SERVICE");
             if (ht.getState() == Thread.State.NEW) {
                 ht.start();
                 looper = ht.getLooper();
@@ -250,10 +246,6 @@ public class TerminalControllerService implements ServiceConnection {
 
             // We want to monitor the service for as long as we are
             // connected to it.
-            Log.e(Config.APP_LOG_TAG, "CLIENT: registering");
-            sendMessageToServer(TerminalService.MSG_REGISTER_CLIENT);
-            Log.e(Config.APP_LOG_TAG, "CLIENT: unregistering");
-            sendMessageToServer(TerminalService.MSG_UNREGISTER_CLIENT);
             Log.e(Config.APP_LOG_TAG, "CLIENT: registering");
             sendMessageToServer(TerminalService.MSG_REGISTER_CLIENT);
             if (terminalController != null) {
@@ -285,7 +277,12 @@ public class TerminalControllerService implements ServiceConnection {
                     // and don't want an annoying toast for that.
                     terminalController.showToast(terminalController.toToastTitle(updatedSession), false);
                 }
-                mListViewAdapter.notifyDataSetChanged();
+                terminalController.activity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        mListViewAdapter.notifyDataSetChanged();
+                    }
+                });
             }
 
             @Override
@@ -461,7 +458,10 @@ public class TerminalControllerService implements ServiceConnection {
     }
 
     public TerminalSession createLog(TrackedActivity activity, boolean printWelcomeMessage) {
-        if (terminalController.mTermService == null) return null;
+        if (terminalController.mTermService == null) {
+            Log.e(Config.APP_LOG_TAG, "error: terminalController.mTermService is null");
+            return null;
+        }
         TerminalSession session;
         TerminalSession currentSession = terminalController.mTerminalView.getCurrentSession();
 
@@ -476,21 +476,34 @@ public class TerminalControllerService implements ServiceConnection {
             session.mSessionName = "LOG [CONNECTED: pid=" + logPid + ", " + activity.packageName + "]";
         JNI.puts(String.format(Locale.ENGLISH, "log has started, pid is %d", logPid));
 
-        terminalController.switchToSession(currentSession, session);
-        mListViewAdapter.notifyDataSetChanged();
+        terminalController.activity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                terminalController.switchToSession(currentSession, session);
+                mListViewAdapter.notifyDataSetChanged();
+            }
+        });
         return session;
     }
 
-    public TerminalSession createLogcat() {
-        return createLogcat(null);
+    private TerminalSession createLogcat() {
+        return createLogcat(null, false);
     }
 
-    public TerminalSession createLogcat(TrackedActivity activity) {
-        if (terminalController.mTermService == null) return null;
+    public TerminalSession createLogcat(TrackedActivity trackedActivity) {
+        return createLogcat(null, false);
+    }
+
+    public TerminalSession createLogcat(TrackedActivity activity, boolean useRoot) {
+        if (terminalController.mTermService == null) {
+            Log.e(Config.APP_LOG_TAG, "error: terminalController.mTermService is null");
+            return null;
+        }
+
         TerminalSession session;
         TerminalSession currentSession = terminalController.mTerminalView.getCurrentSession();
 
-        session = terminalController.mTermService.createLogcatSession(activity);
+        session = terminalController.mTermService.createLogcatSession(activity, useRoot);
         terminalController.mTerminalView.attachSession(session);
 
         int logPid;
@@ -502,8 +515,13 @@ public class TerminalControllerService implements ServiceConnection {
                 "logcat -C --pid=" + activity.pid + " [CONNECTED: " + activity.packageName + "]";
         JNI.puts(String.format(Locale.ENGLISH, "logcat has started, pid is %d", logPid));
 
-        terminalController.switchToSession(currentSession, session);
-        mListViewAdapter.notifyDataSetChanged();
+        terminalController.activity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                terminalController.switchToSession(currentSession, session);
+                mListViewAdapter.notifyDataSetChanged();
+            }
+        });
         return session;
     }
 
@@ -512,7 +530,11 @@ public class TerminalControllerService implements ServiceConnection {
     }
 
     public TerminalSession createShell(TrackedActivity activity) {
-        if (terminalController.mTermService == null) return null;
+        if (terminalController.mTermService == null) {
+            Log.e(Config.APP_LOG_TAG, "error: terminalController.mTermService is null");
+            return null;
+        }
+
         TerminalSession session;
         TerminalSession currentSession = terminalController.mTerminalView.getCurrentSession();
 
@@ -524,8 +546,13 @@ public class TerminalControllerService implements ServiceConnection {
         session.mSessionName = "SHELL [LOCAL: pid=" + shellPid + "]";
         JNI.puts(String.format(Locale.ENGLISH, "shell has started, pid is %d", shellPid));
 
-        terminalController.switchToSession(currentSession, session);
-        mListViewAdapter.notifyDataSetChanged();
+        terminalController.activity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                terminalController.switchToSession(currentSession, session);
+                mListViewAdapter.notifyDataSetChanged();
+            }
+        });
         return session;
     }
 
@@ -541,27 +568,35 @@ public class TerminalControllerService implements ServiceConnection {
                 ? null : terminalController.mTerminalView.getCurrentSession().isLogView();
     }
 
-    public void runOnServiceConnect(Runnable runnable) {
+    public void runWhenConnectedToService(Runnable runnable) {
         runnableArrayList.add(runnable);
     }
 
     public void bindToTerminalService(Activity activity) {
-        Intent serviceIntent = new Intent(activity, TerminalService.class);
+        Intent serviceIntent = new Intent("alpine.term.TerminalControllerService");
         serviceIntent.setPackage("alpine.term");
-
-        // Start the service and make it run regardless of who is bound to it:
-        activity.startService(serviceIntent);
 
         // Establish a connection with the service.  We use an explicit
         // class name because there is no reason to be able to let other
         // applications replace our component.
-        if (!activity.bindService(serviceIntent, this, 0)) {
+        if (!activity.bindService(serviceIntent, this, Context.BIND_EXTERNAL_SERVICE)) {
             throw new RuntimeException("bindService() failed");
         }
         mIsBound = true;
     }
 
-    public void registerActivity(Activity activity, int pseudoTerminal) {
+    public void registerActivity(final Activity activity, final int pseudoTerminal) {
+        runWhenConnectedToService(new Runnable() {
+            @Override
+            public void run() {
+                Log.e(Config.APP_LOG_TAG, "REGISTERING ACTIVITY");
+                registerActivity_(activity, pseudoTerminal);
+                Log.e(Config.APP_LOG_TAG, "REGISTERED ACTIVITY");
+            }
+        });
+    }
+
+    private void registerActivity_(Activity activity, int pseudoTerminal) {
         TrackedActivity trackedActivity = new TrackedActivity();
         trackedActivity.storeNativeFD(pseudoTerminal);
         trackedActivity.packageName = activity.getPackageName();
@@ -588,6 +623,11 @@ public class TerminalControllerService implements ServiceConnection {
     }
 
     public void startTerminalActivity() {
-        sendMessageToServer(TerminalService.MSG_START_TERMINAL_ACTIVITY);
+        runWhenConnectedToService(new Runnable() {
+            @Override
+            public void run() {
+                sendMessageToServer(TerminalService.MSG_START_TERMINAL_ACTIVITY);
+            }
+        });
     }
 }

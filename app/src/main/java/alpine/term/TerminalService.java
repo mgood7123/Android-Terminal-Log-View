@@ -27,7 +27,6 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.ActivityInfo;
 import android.net.wifi.WifiManager;
 import android.os.Binder;
 import android.os.Build;
@@ -38,7 +37,6 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.Message;
 import android.os.Messenger;
-import android.os.Parcelable;
 import android.os.PowerManager;
 import android.os.RemoteException;
 import android.util.Log;
@@ -191,6 +189,7 @@ public class TerminalService extends Service implements SessionChangedCallback {
     final Object waitOnMe = new Object();
 
     final TerminalService terminalService = this;
+    TerminalControllerService terminalControllerService = null;
 
     HandlerThread ht = new HandlerThread("threadName");
     Looper looper;
@@ -247,6 +246,19 @@ public class TerminalService extends Service implements SessionChangedCallback {
                             "SERVER: PID OF TRACKED ACTIVITY: " + trackedActivity.pid
                         );
                         terminalService.mTrackedActivities.add(trackedActivity);
+                        if (terminalControllerService != null) {
+                            Log.e(
+                                Config.APP_LOG_TAG,
+                                "SERVER: terminalControllerService is not null"
+                            );
+                            terminalControllerService.createLog(trackedActivity, false);
+                            terminalControllerService.createLogcat(trackedActivity, true);
+                        } else {
+                            Log.e(
+                                Config.APP_LOG_TAG,
+                                "SERVER: terminalControllerService is null"
+                            );
+                        }
                         sendMessage(msg, MSG_REGISTERED_ACTIVITY);
                     }
                     break;
@@ -324,7 +336,7 @@ public class TerminalService extends Service implements SessionChangedCallback {
 
         // If this service really do get killed, there is no point restarting it automatically - let the user do on next
         // start of {@link Term):
-        return Service.START_NOT_STICKY;
+        return Service.START_STICKY;
     }
 
     public void sendMessage(Message msg, int what) {
@@ -481,11 +493,44 @@ public class TerminalService extends Service implements SessionChangedCallback {
         return session;
     }
 
+    TerminalSession startLogcatSessionWithRoot(TrackedActivity activity, ArrayList<String> environment, String runtimeDataPath) {
+        if (activity == null) {
+            Log.e(
+                Config.APP_LOG_TAG,
+                "starting a local logcat as root makes no sense, starting logcat without root"
+            );
+            return startLogcatSessionWithoutRoot(activity, environment, runtimeDataPath);
+        }
+        ArrayList<String> processArgs = new ArrayList<>();
+        processArgs.add("/sbin/su");
+        processArgs.add("-c");
+        processArgs.add("/bin/logcat -C --pid=" + activity.pid);
+        Log.i(Config.APP_LOG_TAG, "initiating sh session with following arguments: " + processArgs.toString());
+
+        TerminalSession session = new TerminalSession(true, "/sbin/su", processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this, activity, false);
+        mTerminalSessions.add(session);
+        updateNotification();
+        return session;
+    }
+
+    TerminalSession startLogcatSessionWithoutRoot(TrackedActivity activity, ArrayList<String> environment, String runtimeDataPath) {
+        ArrayList<String> processArgs = new ArrayList<>();
+        processArgs.add("/bin/logcat");
+        processArgs.add("-C");
+        if (activity != null) processArgs.add("--pid=" + activity.pid);
+        else processArgs.add("--pid=" + JNI.getPid());
+        Log.i(Config.APP_LOG_TAG, "initiating sh session with following arguments: " + processArgs.toString());
+        TerminalSession session = new TerminalSession(true, processArgs.get(0), processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this, activity, false);
+        mTerminalSessions.add(session);
+        updateNotification();
+        return session;
+    }
+
     /**
      * Creates terminal instance with running 'Logcat'.
      * @return              a created terminal session that can be attached to TerminalView.
      */
-    public TerminalSession createLogcatSession(TrackedActivity activity) {
+    public TerminalSession createLogcatSession(TrackedActivity activity, boolean useRoot) {
         ArrayList<String> environment = new ArrayList<>();
         Context appContext = getApplicationContext();
 
@@ -500,18 +545,8 @@ public class TerminalService extends Service implements SessionChangedCallback {
         environment.add("PATH=" + System.getenv("PATH"));
         environment.add("TMPDIR=" + Config.getTemporaryDirectory(appContext));
 
-        ArrayList<String> processArgs = new ArrayList<>();
-        processArgs.add("/bin/logcat");
-        processArgs.add("-C");
-        if (activity != null) processArgs.add("--pid=" + activity.pid);
-        else processArgs.add("--pid=" + JNI.getPid());
-
-        Log.i(Config.APP_LOG_TAG, "initiating sh session with following arguments: " + processArgs.toString());
-
-        TerminalSession session = new TerminalSession(true, "/bin/logcat", processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this, activity, false);
-        mTerminalSessions.add(session);
-        updateNotification();
-        return session;
+        if (useRoot) return startLogcatSessionWithRoot(activity, environment, runtimeDataPath);
+        else return startLogcatSessionWithoutRoot(activity, environment, runtimeDataPath);
     }
 
     private Notification buildNotification() {

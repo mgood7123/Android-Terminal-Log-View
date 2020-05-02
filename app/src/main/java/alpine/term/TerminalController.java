@@ -454,8 +454,13 @@ public class TerminalController {
      * switch to session and note about it
      */
     public void switchToSession(TerminalSession session) {
-        terminalControllerService.mListViewAdapter.notifyDataSetChanged();
-        mTerminalView.attachSession(session);
+        terminalControllerService.terminalController.activity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                terminalControllerService.mListViewAdapter.notifyDataSetChanged();
+                mTerminalView.attachSession(session);
+            }
+        });
         if (mIsVisible) {
             final int indexOfSession = mTermService.getSessions().indexOf(session);
 
@@ -491,11 +496,16 @@ public class TerminalController {
     public void switchToSession(TerminalSession currentSession, TerminalSession targetSession) {
         Log.d(Config.APP_LOG_TAG, "current session = " + currentSession);
         Log.d(Config.APP_LOG_TAG, "target session = " + targetSession);
-        if (currentSession == null) switchToSession(targetSession);
-        else {
-            if (!(currentSession.getPid() == targetSession.getPid())) {
+        if (currentSession == null) {
+            Log.d(Config.APP_LOG_TAG, "current session is null");
+            switchToSession(targetSession);
+        } else {
+            if (currentSession != targetSession) {
+                Log.e(Config.APP_LOG_TAG, "current session and target session are not the same");
                 previousSession = currentSession;
                 switchToSession(targetSession);
+            } else {
+                Log.e(Config.APP_LOG_TAG, "current session and target session are the same");
             }
         }
     }
