@@ -265,7 +265,14 @@ public class TerminalControllerService implements ServiceConnection {
             @Override
             public void onTextChanged(TerminalSession changedSession) {
                 if (!terminalController.mIsVisible) return;
-                if (terminalController.mTerminalView.getCurrentSession() == changedSession) terminalController.mTerminalView.onScreenUpdated();
+                if (terminalController.mTerminalView.getCurrentSession() == changedSession) {
+                    terminalController.activity.runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            terminalController.mTerminalView.onScreenUpdated();
+                        }
+                    });
+                }
             }
 
             @Override

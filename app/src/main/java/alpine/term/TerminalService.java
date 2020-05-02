@@ -507,7 +507,7 @@ public class TerminalService extends Service implements SessionChangedCallback {
         processArgs.add("/bin/logcat -C --pid=" + activity.pid);
         Log.i(Config.APP_LOG_TAG, "initiating sh session with following arguments: " + processArgs.toString());
 
-        TerminalSession session = new TerminalSession(true, "/sbin/su", processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this, activity, false);
+        TerminalSession session = new TerminalSession(true, processArgs.get(0), processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this, activity, false);
         mTerminalSessions.add(session);
         updateNotification();
         return session;

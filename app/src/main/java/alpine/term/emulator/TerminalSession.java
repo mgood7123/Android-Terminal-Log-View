@@ -350,7 +350,11 @@ public final class TerminalSession extends TerminalOutput {
         mEmulator = new TerminalEmulator(this, columns, rows, /* transcript= */5000);
 
         if (isLogView) {
-            if (mShellPath.contentEquals("/bin/logcat")) {
+            if (
+                mShellPath.contentEquals("/bin/logcat") ||
+                mShellPath.contentEquals("/sbin/su") ||
+                mShellPath.contentEquals("/sbin/magisk")
+            ) {
                 createLogcatSession(columns, rows, context);
                 new Thread("TermSession[pid=" + mShellPid + "]") {
                     @Override
