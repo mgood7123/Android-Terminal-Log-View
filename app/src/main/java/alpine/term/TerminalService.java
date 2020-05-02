@@ -251,6 +251,7 @@ public class TerminalService extends Service implements SessionChangedCallback {
                                 Config.APP_LOG_TAG,
                                 "SERVER: terminalControllerService is not null"
                             );
+                            // TODO: remove these and unregister when client dies
                             terminalControllerService.createLog(trackedActivity, false);
                             terminalControllerService.createLogcat(trackedActivity, true);
                         } else {
