@@ -20,7 +20,9 @@ public class TrackedActivity implements Parcelable {
     public String packageName = "<INVALID>";
     public String label = "";
     public int pid = 0;
-    public ParcelFileDescriptor pseudoTerminal = null;
+    public String pidAsString;
+    public ParcelFileDescriptor pseudoTerminalMaster = null;
+    public ParcelFileDescriptor pseudoTerminalSlave = null;
     public String description;
 
     /**
@@ -82,16 +84,18 @@ public class TrackedActivity implements Parcelable {
     }
 
     /**
-     * stores an fd, this can be obtained via getNativeFD() or
-     * unwrapFileDescriptor(getJavaFileDescriptor())
-     * @return true if the fd was stored successfully, otherwise false
+     * stores a PseudoTerminal returned by {@link TerminalClientAPI#createPseudoTerminal()},
+     * this can be obtained via {@link #getPseudoTerminal()}
+     * @return true if the PseudoTerminal was stored successfully, otherwise false
      */
-    public boolean storeNativeFD(int fd) {
+    public boolean storePseudoTerminal(int[] fd) {
         // https://github.com/hacking-android/frameworks/blob/943f0b4d46f72532a419fb6171e40d1c93984c8e/devices/google/Pixel%202/29/QPP6.190730.005/src/framework/android/net/IpSecUdpEncapResponse.java#L49
         try {
-            FileDescriptor fileDescriptor = wrapFileDescriptor(fd);
-            if (fileDescriptor == null) return false;
-            pseudoTerminal = ParcelFileDescriptor.dup(fileDescriptor);
+            FileDescriptor fileDescriptor0 = wrapFileDescriptor(fd[0]);
+            FileDescriptor fileDescriptor1 = wrapFileDescriptor(fd[1]);
+            if (fileDescriptor0 == null || fileDescriptor1 == null) return false;
+            pseudoTerminalMaster = ParcelFileDescriptor.dup(fileDescriptor0);
+            pseudoTerminalSlave = ParcelFileDescriptor.dup(fileDescriptor1);
             return true;
         } catch (IOException e) {
             e.printStackTrace();
@@ -100,19 +104,14 @@ public class TrackedActivity implements Parcelable {
     }
 
     /**
-     * obtains the FileDescriptor stored from storeNativeFD()
-     * @return an FileDescriptor, this may be null indicating an error occurred
+     * obtains the fd stored from {@link #storePseudoTerminal(int[])}
+     * @return an fd, this may be null if an error has occurred
      */
-    public FileDescriptor getJavaFileDescriptor() {
-        return pseudoTerminal.getFileDescriptor();
-    }
-
-    /**
-     * obtains the fd stored from storeNativeFD()
-     * @return an fd, this may be -1 indicating an error occurred
-     */
-    public int getNativeFD() {
-        return unwrapFileDescriptor(pseudoTerminal.getFileDescriptor());
+    public int[] getPseudoTerminal() {
+        int[] fds = new int[2];
+        fds[0] = unwrapFileDescriptor(pseudoTerminalMaster.getFileDescriptor());
+        fds[1] = unwrapFileDescriptor(pseudoTerminalSlave.getFileDescriptor());
+        return fds[0] == -1 || fds[1] == -1 ? null : fds;
     }
 
     protected TrackedActivity(Parcel in) {
@@ -120,7 +119,9 @@ public class TrackedActivity implements Parcelable {
         packageName = in.readString();
         label = in.readString();
         pid = in.readInt();
-        pseudoTerminal = in.readParcelable(ParcelFileDescriptor.class.getClassLoader());
+        pidAsString = in.readString();
+        pseudoTerminalMaster = in.readParcelable(ParcelFileDescriptor.class.getClassLoader());
+        pseudoTerminalSlave = in.readParcelable(ParcelFileDescriptor.class.getClassLoader());
         description = in.readString();
     }
 
@@ -135,12 +136,14 @@ public class TrackedActivity implements Parcelable {
         dest.writeString(packageName);
         dest.writeString(label);
         dest.writeInt(pid);
-        dest.writeParcelable(this.pseudoTerminal, 1);
+        dest.writeString(pidAsString);
+        dest.writeParcelable(this.pseudoTerminalMaster, 1);
+        dest.writeParcelable(this.pseudoTerminalSlave, 1);
         dest.writeString(description);
     }
 
     @SuppressWarnings("unused")
-    public static final Parcelable.Creator<TrackedActivity> CREATOR = new Parcelable.Creator<TrackedActivity>() {
+    public static final Creator<TrackedActivity> CREATOR = new Creator<TrackedActivity>() {
         @Override
         public TrackedActivity createFromParcel(Parcel in) {
             return new TrackedActivity(in);

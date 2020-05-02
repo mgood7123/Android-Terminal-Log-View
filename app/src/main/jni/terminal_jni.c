@@ -59,6 +59,44 @@ static int throw_runtime_exception(JNIEnv* env, char const* message)
     return -1;
 }
 
+jintArray createJniArray(JNIEnv *env, size_t size) {
+    jintArray result = (*env)->NewIntArray(env, size);
+    if (result == NULL) {
+        return NULL; /* out of memory error thrown */
+    } else return result;
+}
+
+void setJniArrayIndex(JNIEnv *env, jintArray * array, int index, int value) {
+    // fill a temp structure to use to populate the java int array
+    jint fill[1];
+
+    // populate the values
+    fill[0] = value;
+
+    // move from the temp structure to the java structure
+    (*env)->SetIntArrayRegion(env, *array, index, 1, fill);
+}
+
+bool setJniArrayIndexes(
+    JNIEnv *env, jintArray * array, int index,
+    int * pointer, int totalIndexesInPointer
+) {
+    // fill a temp structure to use to populate the java int array
+    jint * fill = (jint*) malloc(totalIndexesInPointer * sizeof(jint));
+    if (fill == NULL) return false;
+
+    // populate the values
+    // if valueTotalIndexes is 1, then
+    for (int i = 0; i < totalIndexesInPointer; ++i) {
+        fill[i] = pointer[i];
+    }
+
+    // move from the temp structure to the java structure
+    (*env)->SetIntArrayRegion(env, *array, index, totalIndexesInPointer, fill);
+    free(fill);
+    return true;
+}
+
 static int create_subprocess(JNIEnv* env,
         char const* cmd,
         char const* cwd,
@@ -264,7 +302,7 @@ Java_alpine_term_emulator_JNI_getPid(JNIEnv *ALPINE_TERM_UNUSED(env), jclass ALP
     return getpid();
 }
 
-JNIEXPORT jint JNICALL
+JNIEXPORT int* JNICALL
 Java_alpine_term_emulator_JNI_createPseudoTerminal(
     JNIEnv *env,
     jclass ALPINE_TERM_UNUSED(clazz),
@@ -273,7 +311,11 @@ Java_alpine_term_emulator_JNI_createPseudoTerminal(
     LOGV("opening ptmx (master) device");
     int ptm = open("/dev/ptmx", O_RDWR | O_CLOEXEC);
     LOGV("opened ptmx (master) device: %d", ptm);
-    if (ptm < 0) return throw_runtime_exception(env, "Cannot open /dev/ptmx");
+    if (ptm < 0) {
+        jintArray a = createJniArray(env, 1);
+        setJniArrayIndex(env, &a, 0, throw_runtime_exception(env, "Cannot open /dev/ptmx"));
+        return a;
+    }
 
 #ifdef LACKS_PTSNAME_R
     char* devname;
@@ -287,7 +329,10 @@ Java_alpine_term_emulator_JNI_createPseudoTerminal(
         ptsname_r(ptm, devname, sizeof(devname))
 #endif
         ) {
-        return throw_runtime_exception(env, "Cannot grantpt()/unlockpt()/ptsname_r() on /dev/ptmx");
+        char * msg = "Cannot grantpt()/unlockpt()/ptsname_r() on /dev/ptmx";
+        jintArray a = createJniArray(env, 1);
+        setJniArrayIndex(env, &a, 0, throw_runtime_exception(env, msg));
+        return a;
     }
 
     // Enable UTF-8 mode.
@@ -311,14 +356,17 @@ Java_alpine_term_emulator_JNI_createPseudoTerminal(
     int pts = open(devname, O_RDWR);
     if (pts < 0) {
         LOGE("cannot open %s (slave) device: %d (error: %s)", devname, pts, strerror(errno));
-        return throw_runtime_exception(env, "failed to open slave device");
+        char * msg = "failed to open slave device";
+        jintArray a = createJniArray(env, 1);
+        setJniArrayIndex(env, &a, 0, throw_runtime_exception(env, msg));
+        return a;
     }
     LOGV("opened %s (slave) device: %d", devname, pts);
     LOGV("duping current stdin (fd 0), stdout (fd 1), and stderr (fd 2) to %s (slave) device: %d", devname, pts);
     dup2(pts, 0);
     dup2(pts, 1);
     dup2(pts, 2);
-    
+
     if (printWelcomeMessage) {
         puts("Welcome to the Android Terminal Log\n");
 
@@ -339,5 +387,77 @@ Java_alpine_term_emulator_JNI_createPseudoTerminal(
     printf("duping current stdin (fd 0), stdout (fd 1), and stderr (fd 2) to %s (slave) device: %d\n", devname, pts);
     printf("returning ptmx (master) device: %d\n", ptm);
     LOGV("returning ptmx (master) device: %d\n", ptm);
-    return ptm;
+    jintArray a = createJniArray(env, 2);
+    setJniArrayIndex(env, &a, 0, ptm);
+    setJniArrayIndex(env, &a, 1, pts);
+    return a;
+}
+
+#include "regex_str.h"
+#include "env.h"
+
+JNIEXPORT jboolean JNICALL
+Java_alpine_term_emulator_JNI_hasDied(
+    JNIEnv * env,
+    jclass ALPINE_TERM_UNUSED(clazz),
+    jstring package_name
+) {
+    env_t argv = env__new();
+    argv = env__add(argv, "/sbin/su");
+    argv = env__add(argv, "-c");
+
+    str_new_fast(command);
+    str_insert_string_fast(command, "pidof ");
+    char const *package_name_utf8 = (*env)->GetStringUTFChars(env, package_name, NULL);
+    str_insert_string_fast(command, package_name_utf8);
+    argv = env__add(argv, command.string);
+    (*env)->ReleaseStringUTFChars(env, package_name, package_name_utf8);
+
+    str_free_fast(command);
+
+    env_t envp = env__new();
+    envp = env__add(envp, getenv("PATH"));
+    int status;
+    pid_t child_id;
+    int null = open("/dev/null", O_WRONLY);
+    bool nullOpened = true;
+    if (null < 0) {
+        nullOpened = false;
+        throw_runtime_exception(env, "Cannot open /dev/null");
+        // continue
+    }
+    child_id = fork();
+    if (child_id == 0) {
+        clearenv();
+        env__put(envp);
+
+        // redirect stdout and stderr to /dev/null
+        if (nullOpened) {
+            dup2(null, 1);
+            dup2(null, 2);
+        }
+
+        execv(argv[0], argv);
+    }
+    if (child_id < 0) {
+        if (nullOpened) close(null);
+        env__free(envp);
+        env__free(argv);
+        throw_runtime_exception(env, "Fork failed");
+        return false;
+    }
+    wait(&status);
+    env__free(envp);
+    env__free(argv);
+    if (nullOpened) close(null);
+    if (WIFEXITED(status)) {
+        int returned = WEXITSTATUS(status);
+        if (returned == 0)
+            return false;
+        else
+            return true;
+    }
+    throw_runtime_exception(env, "process did not exit correctly");
+    // unreached due to throw
+    return false;
 }

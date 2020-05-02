@@ -778,7 +778,7 @@ public class TerminalController {
         return (DrawerLayout) activity.findViewById(R.id.drawer_layout);
     }
 
-    public static int createPseudoTerminal() {
+    public static int[] createPseudoTerminal() {
         return JNI.createPseudoTerminal(false);
     }
 }

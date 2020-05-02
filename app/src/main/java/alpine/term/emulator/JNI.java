@@ -65,5 +65,7 @@ public final class JNI {
 
     public static native int getPid();
 
-    public static native int createPseudoTerminal(boolean printWelcomeMessage);
+    public static native int[] createPseudoTerminal(boolean printWelcomeMessage);
+
+    public static native boolean hasDied(String packageName);
 }

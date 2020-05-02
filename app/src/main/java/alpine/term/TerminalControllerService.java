@@ -1,6 +1,7 @@
 package alpine.term;
 
 import android.app.Activity;
+import android.app.ActivityManager;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.ComponentName;
@@ -8,6 +9,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.pm.ActivityInfo;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.graphics.Color;
@@ -21,6 +23,7 @@ import android.os.Looper;
 import android.os.Message;
 import android.os.Messenger;
 import android.os.RemoteException;
+import android.os.SystemClock;
 import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.TextUtils;
@@ -35,10 +38,13 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
 import alpine.term.emulator.JNI;
 import alpine.term.emulator.TerminalSession;
+
+import static android.content.Context.ACTIVITY_SERVICE;
 
 public class TerminalControllerService implements ServiceConnection {
 
@@ -434,9 +440,9 @@ public class TerminalControllerService implements ServiceConnection {
                 createLogcat();
                 terminalController.switchToSession(log);
                 // create a log and logcat for each registered activity
-                for (TrackedActivity activity : terminalController.mTermService.mTrackedActivities) {
-                    log = createLog(activity, false);
-                    createLogcat(activity);
+                for (TrackedActivity trackedActivity : terminalController.mTermService.mTrackedActivities) {
+                    log = createLog(trackedActivity, false);
+                    createLogcat(trackedActivity);
                     terminalController.switchToSession(log);
                 }
             } else {
@@ -464,7 +470,7 @@ public class TerminalControllerService implements ServiceConnection {
         return createLog(null, printWelcomeMessage);
     }
 
-    public TerminalSession createLog(TrackedActivity activity, boolean printWelcomeMessage) {
+    public TerminalSession createLog(TrackedActivity trackedActivity, boolean printWelcomeMessage) {
         if (terminalController.mTermService == null) {
             Log.e(Config.APP_LOG_TAG, "error: terminalController.mTermService is null");
             return null;
@@ -472,15 +478,16 @@ public class TerminalControllerService implements ServiceConnection {
         TerminalSession session;
         TerminalSession currentSession = terminalController.mTerminalView.getCurrentSession();
 
-        session = terminalController.mTermService.createShellSession(true, activity, printWelcomeMessage);
+        session = terminalController.mTermService.createShellSession(true, trackedActivity, printWelcomeMessage);
         terminalController.mTerminalView.attachSession(session);
 
         int logPid;
         logPid = session.getPid();
-        if (activity == null)
+        if (session.isTrackedActivity) {
+            session.mSessionName = "LOG [CONNECTED: pid=" + logPid + ", " + trackedActivity.packageName + "]";
+        } else {
             session.mSessionName = "LOG [LOCAL: pid=" + logPid + "]";
-        else
-            session.mSessionName = "LOG [CONNECTED: pid=" + logPid + ", " + activity.packageName + "]";
+        }
         JNI.puts(String.format(Locale.ENGLISH, "log has started, pid is %d", logPid));
 
         terminalController.activity.runOnUiThread(new Runnable() {
@@ -501,7 +508,7 @@ public class TerminalControllerService implements ServiceConnection {
         return createLogcat(null, false);
     }
 
-    public TerminalSession createLogcat(TrackedActivity activity, boolean useRoot) {
+    public TerminalSession createLogcat(TrackedActivity trackedActivity, boolean useRoot) {
         if (terminalController.mTermService == null) {
             Log.e(Config.APP_LOG_TAG, "error: terminalController.mTermService is null");
             return null;
@@ -510,16 +517,18 @@ public class TerminalControllerService implements ServiceConnection {
         TerminalSession session;
         TerminalSession currentSession = terminalController.mTerminalView.getCurrentSession();
 
-        session = terminalController.mTermService.createLogcatSession(activity, useRoot);
+        session = terminalController.mTermService.createLogcatSession(trackedActivity, useRoot);
         terminalController.mTerminalView.attachSession(session);
 
         int logPid;
         logPid = session.getPid();
-        if (activity == null)
-            session.mSessionName = "logcat -C --pid=" + JNI.getPid() + " [LOCAL: pid=" + logPid + "]";
-        else
+        if (session.isTrackedActivity) {
             session.mSessionName =
-                "logcat -C --pid=" + activity.pid + " [CONNECTED: " + activity.packageName + "]";
+                "logcat -C --pid=" + session.trackedActivityPid +
+                    " [CONNECTED: " + trackedActivity.packageName + "]";
+        } else {
+            session.mSessionName = "logcat -C --pid=" + JNI.getPid() + " [LOCAL: pid=" + logPid + "]";
+        }
         JNI.puts(String.format(Locale.ENGLISH, "logcat has started, pid is %d", logPid));
 
         terminalController.activity.runOnUiThread(new Runnable() {
@@ -536,7 +545,7 @@ public class TerminalControllerService implements ServiceConnection {
         return createShell(null);
     }
 
-    public TerminalSession createShell(TrackedActivity activity) {
+    public TerminalSession createShell(TrackedActivity trackedActivity) {
         if (terminalController.mTermService == null) {
             Log.e(Config.APP_LOG_TAG, "error: terminalController.mTermService is null");
             return null;
@@ -545,7 +554,7 @@ public class TerminalControllerService implements ServiceConnection {
         TerminalSession session;
         TerminalSession currentSession = terminalController.mTerminalView.getCurrentSession();
 
-        session = terminalController.mTermService.createShellSession(false, activity, false);
+        session = terminalController.mTermService.createShellSession(false, trackedActivity, false);
         terminalController.mTerminalView.attachSession(session);
 
         int shellPid;
@@ -592,7 +601,7 @@ public class TerminalControllerService implements ServiceConnection {
         mIsBound = true;
     }
 
-    public void registerActivity(final Activity activity, final int pseudoTerminal) {
+    public void registerActivity(final Activity activity, final int[] pseudoTerminal) {
         runWhenConnectedToService(new Runnable() {
             @Override
             public void run() {
@@ -603,11 +612,12 @@ public class TerminalControllerService implements ServiceConnection {
         });
     }
 
-    private void registerActivity_(Activity activity, int pseudoTerminal) {
+    private void registerActivity_(Activity activity, int[] pseudoTerminal) {
         TrackedActivity trackedActivity = new TrackedActivity();
-        trackedActivity.storeNativeFD(pseudoTerminal);
+        trackedActivity.storePseudoTerminal(pseudoTerminal);
         trackedActivity.packageName = activity.getPackageName();
         trackedActivity.pid = JNI.getPid();
+        trackedActivity.pidAsString = Integer.toString(trackedActivity.pid);
         PackageManager pm = activity.getPackageManager();
         ComponentName componentName = activity.getComponentName();
         ActivityInfo activityInfo;

@@ -40,6 +40,7 @@ import android.os.Messenger;
 import android.os.PowerManager;
 import android.os.RemoteException;
 import android.util.Log;
+import android.util.Pair;
 import android.widget.ArrayAdapter;
 
 import java.util.ArrayList;
@@ -102,6 +103,8 @@ public class TerminalService extends Service implements SessionChangedCallback {
     static final int MSG_CALLBACK_INVOKED = 100;
     static final int MSG_IS_SERVER_ALIVE = 1300;
     static final int MSG_NO_REPLY = 999;
+
+    public LogUtils logUtils = new LogUtils("TERMINAL SERVICE");
 
     /**
      * The terminal sessions which this service manages.
@@ -173,10 +176,16 @@ public class TerminalService extends Service implements SessionChangedCallback {
         Log.e(Config.APP_LOG_TAG, "CLIENT: replied");
     }
 
-    @SuppressWarnings({"PointlessBooleanExpression"})
     public static int toInt(boolean value) {
-        if (value == true) return 0;
-        return 1;
+        return value ? 0 : 1;
+    }
+
+    public static CharSequence toCharSequence(boolean value) {
+        return value ? "true" : "false";
+    }
+
+    public static String toString(boolean value) {
+        return value ? "true" : "false";
     }
 
     @SuppressWarnings("RedundantIfStatement")
@@ -237,19 +246,19 @@ public class TerminalService extends Service implements SessionChangedCallback {
                     if (trackedActivity == null) {
                         Log.e(
                             Config.APP_LOG_TAG,
-                            "SERVER: REGISTER ACTIVITY DID NOT RECEIVE AN ACTIVITY"
+                "SERVER: REGISTER ACTIVITY DID NOT RECEIVE AN ACTIVITY"
                         );
                         sendMessage(msg, MSG_REGISTER_ACTIVITY_FAILED);
                     } else {
                         Log.e(
                             Config.APP_LOG_TAG,
-                            "SERVER: PID OF TRACKED ACTIVITY: " + trackedActivity.pid
+                "SERVER: PID OF TRACKED ACTIVITY: " + trackedActivity.pid
                         );
                         terminalService.mTrackedActivities.add(trackedActivity);
                         if (terminalControllerService != null) {
                             Log.e(
                                 Config.APP_LOG_TAG,
-                                "SERVER: terminalControllerService is not null"
+                    "SERVER: terminalControllerService is not null"
                             );
                             // TODO: remove these and unregister when client dies
                             terminalControllerService.createLog(trackedActivity, false);
@@ -257,7 +266,7 @@ public class TerminalService extends Service implements SessionChangedCallback {
                         } else {
                             Log.e(
                                 Config.APP_LOG_TAG,
-                                "SERVER: terminalControllerService is null"
+                    "SERVER: terminalControllerService is null"
                             );
                         }
                         sendMessage(msg, MSG_REGISTERED_ACTIVITY);
@@ -335,8 +344,76 @@ public class TerminalService extends Service implements SessionChangedCallback {
             Log.w(Config.APP_LOG_TAG, "received an unknown action for TerminalService: " + action);
         }
 
-        // If this service really do get killed, there is no point restarting it automatically - let the user do on next
-        // start of {@link Term):
+        new Thread("ActivityMonitor") {
+            @Override
+            public void run() {
+                //noinspection InfiniteLoopStatement
+                while(true) {
+                    if (!mTrackedActivities.isEmpty()) {
+                        // The client is dead.  Remove it from the list;
+                        List<Pair<Integer, Pair<Pair<Integer, String>, String>>> ids =
+                            new ArrayList<>();
+                        for (int i = mTrackedActivities.size() - 1; i >= 0; i--) {
+                            TrackedActivity trackedActivity = mTrackedActivities.get(i);
+                            if (JNI.hasDied(trackedActivity.packageName)) {
+
+                                // TODO: is this correct?
+                                ids.add(
+                                    new Pair<>(
+                                        i, new Pair<>(
+                                            new Pair<>(
+                                                trackedActivity.pid, trackedActivity.pidAsString
+                                            )
+                                        , trackedActivity.packageName)
+                                    )
+                                );
+                            }
+                        }
+                        for (Pair<Integer, Pair<Pair<Integer, String>, String>> id : ids) {
+                            String message =
+                                "the process " + id.second.second +
+                                " associated with the pid " + id.second.first.second +
+                                " has died, removing...";
+                            JNI.puts(message);
+                            logUtils.log_Info(message);
+
+                            // each client has up to two terminal sessions open
+                            // a native terminal, and a logcat terminal
+
+                            List<TerminalSession> terminals = new ArrayList<>();
+
+                            for (int i = 0; i < mTerminalSessions.size(); i++) {
+                                TerminalSession terminalSession = mTerminalSessions.get(i);
+                                if (terminalSession.isTrackedActivity) {
+                                    int pid = id.second.first.first;
+                                    if (terminalSession.trackedActivityPid == pid) {
+                                        terminals.add(terminalSession);
+                                    }
+                                }
+                            }
+                            for (TerminalSession terminal : terminals) {
+                                // close the master half of a pseudo-terminal pair of this terminal
+                                JNI.close(terminal.mTerminalFileDescriptor);
+                                removeSession(terminal);
+                            }
+
+                            int index = id.first;
+
+                            // TODO: is this correct?
+                            // close log fd's
+                            TrackedActivity trackedActivity = mTrackedActivities.get(index);
+                            JNI.close(trackedActivity.pseudoTerminalSlave.detachFd());
+                            JNI.close(trackedActivity.pseudoTerminalMaster.detachFd());
+
+                            mTrackedActivities.remove(index);
+                            JNI.puts("removed");
+                            logUtils.log_Info("removed");
+                        }
+                    }
+                }
+            }
+        }.start();
+
         return Service.START_STICKY;
     }
 
@@ -468,7 +545,7 @@ public class TerminalService extends Service implements SessionChangedCallback {
      * @param isLogView     if this is true then this is converted into a LogView instead of a Shell
      * @return              a created terminal session that can be attached to TerminalView.
      */
-    public TerminalSession createShellSession(boolean isLogView, TrackedActivity activity, boolean printWelcomeMessage) {
+    public TerminalSession createShellSession(boolean isLogView, TrackedActivity trackedActivity, boolean printWelcomeMessage) {
         ArrayList<String> environment = new ArrayList<>();
         Context appContext = getApplicationContext();
 
@@ -488,40 +565,40 @@ public class TerminalService extends Service implements SessionChangedCallback {
 
         Log.i(Config.APP_LOG_TAG, "initiating sh session with following arguments: " + processArgs.toString());
 
-        TerminalSession session = new TerminalSession(isLogView, "/bin/sh", processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this, activity, printWelcomeMessage);
+        TerminalSession session = new TerminalSession(isLogView, "/bin/sh", processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this, trackedActivity, printWelcomeMessage);
         mTerminalSessions.add(session);
         updateNotification();
         return session;
     }
 
-    TerminalSession startLogcatSessionWithRoot(TrackedActivity activity, ArrayList<String> environment, String runtimeDataPath) {
-        if (activity == null) {
+    TerminalSession startLogcatSessionWithRoot(TrackedActivity trackedActivity, ArrayList<String> environment, String runtimeDataPath) {
+        if (trackedActivity == null) {
             Log.e(
                 Config.APP_LOG_TAG,
-                "starting a local logcat as root makes no sense, starting logcat without root"
+    "starting a local logcat as root makes no sense, starting logcat without root"
             );
-            return startLogcatSessionWithoutRoot(activity, environment, runtimeDataPath);
+            return startLogcatSessionWithoutRoot(trackedActivity, environment, runtimeDataPath);
         }
         ArrayList<String> processArgs = new ArrayList<>();
         processArgs.add("/sbin/su");
         processArgs.add("-c");
-        processArgs.add("/bin/logcat -C --pid=" + activity.pid);
+        processArgs.add("/bin/logcat -C --pid=" + trackedActivity.pid);
         Log.i(Config.APP_LOG_TAG, "initiating sh session with following arguments: " + processArgs.toString());
 
-        TerminalSession session = new TerminalSession(true, processArgs.get(0), processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this, activity, false);
+        TerminalSession session = new TerminalSession(true, processArgs.get(0), processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this, trackedActivity, false);
         mTerminalSessions.add(session);
         updateNotification();
         return session;
     }
 
-    TerminalSession startLogcatSessionWithoutRoot(TrackedActivity activity, ArrayList<String> environment, String runtimeDataPath) {
+    TerminalSession startLogcatSessionWithoutRoot(TrackedActivity trackedActivity, ArrayList<String> environment, String runtimeDataPath) {
         ArrayList<String> processArgs = new ArrayList<>();
         processArgs.add("/bin/logcat");
         processArgs.add("-C");
-        if (activity != null) processArgs.add("--pid=" + activity.pid);
+        if (trackedActivity != null) processArgs.add("--pid=" + trackedActivity.pid);
         else processArgs.add("--pid=" + JNI.getPid());
         Log.i(Config.APP_LOG_TAG, "initiating sh session with following arguments: " + processArgs.toString());
-        TerminalSession session = new TerminalSession(true, processArgs.get(0), processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this, activity, false);
+        TerminalSession session = new TerminalSession(true, processArgs.get(0), processArgs.toArray(new String[0]), environment.toArray(new String[0]), runtimeDataPath, this, trackedActivity, false);
         mTerminalSessions.add(session);
         updateNotification();
         return session;
@@ -531,7 +608,7 @@ public class TerminalService extends Service implements SessionChangedCallback {
      * Creates terminal instance with running 'Logcat'.
      * @return              a created terminal session that can be attached to TerminalView.
      */
-    public TerminalSession createLogcatSession(TrackedActivity activity, boolean useRoot) {
+    public TerminalSession createLogcatSession(TrackedActivity trackedActivity, boolean useRoot) {
         ArrayList<String> environment = new ArrayList<>();
         Context appContext = getApplicationContext();
 
@@ -546,8 +623,8 @@ public class TerminalService extends Service implements SessionChangedCallback {
         environment.add("PATH=" + System.getenv("PATH"));
         environment.add("TMPDIR=" + Config.getTemporaryDirectory(appContext));
 
-        if (useRoot) return startLogcatSessionWithRoot(activity, environment, runtimeDataPath);
-        else return startLogcatSessionWithoutRoot(activity, environment, runtimeDataPath);
+        if (useRoot) return startLogcatSessionWithRoot(trackedActivity, environment, runtimeDataPath);
+        else return startLogcatSessionWithoutRoot(trackedActivity, environment, runtimeDataPath);
     }
 
     private Notification buildNotification() {

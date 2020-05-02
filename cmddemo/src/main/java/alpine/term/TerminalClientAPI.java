@@ -15,11 +15,44 @@ import android.os.Looper;
 import android.os.Message;
 import android.os.Messenger;
 import android.os.RemoteException;
-import android.util.Log;
 
 import java.util.ArrayList;
 
-public class TerminalControllerService implements ServiceConnection {
+public class TerminalClientAPI implements ServiceConnection {
+    static {
+        System.loadLibrary("terminal_jni");
+    }
+    public static native int getPid();
+    public static native int[] createPseudoTerminal();
+
+    public static LogUtils logUtils = new LogUtils("TERMINAL CLIENT");
+
+    /**
+     * Command to the service to register a client, receiving callbacks
+     * from the service.  The Message's replyTo field must be a Messenger of
+     * the client where callbacks should be sent.
+     */
+    static final int MSG_REGISTER_CLIENT = 1;
+    static final int MSG_REGISTERED_CLIENT = 2;
+
+    /**
+     * Command to the service to unregister a client, ot stop receiving callbacks
+     * from the service.  The Message's replyTo field must be a Messenger of
+     * the client as previously given with MSG_REGISTER_CLIENT.
+     */
+
+    static final int MSG_UNREGISTER_CLIENT = 3;
+    static final int MSG_UNREGISTERED_CLIENT = 4;
+
+    public static final int MSG_REGISTER_ACTIVITY = 5;
+    static final int MSG_REGISTERED_ACTIVITY = 6;
+    static final int MSG_REGISTER_ACTIVITY_FAILED = 7;
+    public static final int MSG_START_TERMINAL_ACTIVITY = 8;
+    static final int MSG_STARTED_TERMINAL_ACTIVITY = 9;
+
+    static final int MSG_CALLBACK_INVOKED = 100;
+    static final int MSG_IS_SERVER_ALIVE = 1300;
+    static final int MSG_NO_REPLY = 999;
 
     /** Messenger for communicating with the service. */
     Messenger mService = null;
@@ -31,7 +64,7 @@ public class TerminalControllerService implements ServiceConnection {
     final Object waitOnMe = new Object();
 
     public void waitForReply() {
-        Log.e(Config.APP_LOG_TAG, "CLIENT: waiting for reply");
+        logUtils.log_Info("CLIENT: waiting for reply");
         synchronized (waitOnMe) {
             try {
                 waitOnMe.wait();
@@ -39,10 +72,10 @@ public class TerminalControllerService implements ServiceConnection {
                 // we should have gotten our answer now.
             }
         }
-        Log.e(Config.APP_LOG_TAG, "CLIENT: replied");
+        logUtils.log_Info("CLIENT: replied");
     }
 
-    HandlerThread ht = new HandlerThread("threadName");
+    HandlerThread ht = new HandlerThread("Terminal Client");
     Looper looper;
     Handler handler;
     Handler.Callback callback = new Handler.Callback() {
@@ -50,32 +83,32 @@ public class TerminalControllerService implements ServiceConnection {
         @SuppressWarnings("DuplicateBranchesInSwitch")
         @Override
         public boolean handleMessage(Message msg) {
-            Log.e(Config.APP_LOG_TAG, "CLIENT: received message");
+            logUtils.log_Info("CLIENT: received message");
             switch (msg.what) {
-                case TerminalService.MSG_NO_REPLY:
+                case MSG_NO_REPLY:
                     break;
-                case TerminalService.MSG_REGISTERED_CLIENT:
-                    Log.e(Config.APP_LOG_TAG, "CLIENT: registered");
-                    sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
+                case MSG_REGISTERED_CLIENT:
+                    logUtils.log_Info("CLIENT: registered");
+                    sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
                     break;
-                case TerminalService.MSG_UNREGISTERED_CLIENT:
-                    Log.e(Config.APP_LOG_TAG, "CLIENT: unregistered");
-                    sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
+                case MSG_UNREGISTERED_CLIENT:
+                    logUtils.log_Info("CLIENT: unregistered");
+                    sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
                     break;
-                case TerminalService.MSG_IS_SERVER_ALIVE:
-                    Log.e(Config.APP_LOG_TAG, "CLIENT: SERVER IS ALIVE");
-                    sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
+                case MSG_IS_SERVER_ALIVE:
+                    logUtils.log_Info("CLIENT: SERVER IS ALIVE");
+                    sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
                     break;
-                case TerminalService.MSG_REGISTER_ACTIVITY_FAILED:
-                    sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
+                case MSG_REGISTER_ACTIVITY_FAILED:
+                    sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
                     break;
-                case TerminalService.MSG_REGISTERED_ACTIVITY:
-                    sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
+                case MSG_REGISTERED_ACTIVITY:
+                    sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
                     break;
-                case TerminalService.MSG_STARTED_TERMINAL_ACTIVITY:
+                case MSG_STARTED_TERMINAL_ACTIVITY:
                     break;
                 default:
-                    sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
+                    sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
                     break;
             }
             // handled messages are handled in background thread
@@ -196,21 +229,21 @@ public class TerminalControllerService implements ServiceConnection {
 
     @Override
     public void onServiceConnected(ComponentName componentName, IBinder boundService) {
-        Log.e(Config.APP_LOG_TAG, "onServiceConnected() has been called");
+        logUtils.log_Info("onServiceConnected() has been called");
         mService = new Messenger(boundService);
-        Log.e(Config.APP_LOG_TAG, "CLIENT: BINDED TO REMOTE SERVICE");
+        logUtils.log_Info("CLIENT: BINDED TO REMOTE SERVICE");
         if (ht.getState() == Thread.State.NEW) {
             ht.start();
             looper = ht.getLooper();
             handler = new Handler(looper, callback);
             mMessenger = new Messenger(handler);
-            Log.e(Config.APP_LOG_TAG, "CLIENT: STARTED MESSENGER");
+            logUtils.log_Info("CLIENT: STARTED MESSENGER");
         }
 
         // We want to monitor the service for as long as we are
         // connected to it.
-        Log.e(Config.APP_LOG_TAG, "CLIENT: registering");
-        sendMessageToServer(TerminalService.MSG_REGISTER_CLIENT);
+        logUtils.log_Info("CLIENT: registering");
+        sendMessageToServer(MSG_REGISTER_CLIENT);
 
         for (Runnable action : runnableArrayList) {
             action.run();
@@ -241,22 +274,25 @@ public class TerminalControllerService implements ServiceConnection {
         mIsBound = true;
     }
 
-    public void registerActivity(final Activity activity, final int pseudoTerminal) {
+    public void registerActivity(final Activity activity, final int[] pseudoTerminal) {
         runWhenConnectedToService(new Runnable() {
             @Override
             public void run() {
-                Log.e(Config.APP_LOG_TAG, "REGISTERING ACTIVITY");
+                logUtils.log_Info("REGISTERING ACTIVITY");
                 registerActivity_(activity, pseudoTerminal);
-                Log.e(Config.APP_LOG_TAG, "REGISTERED ACTIVITY");
+                logUtils.log_Info("REGISTERED ACTIVITY");
             }
         });
     }
 
-    private void registerActivity_(Activity activity, int pseudoTerminal) {
+    private void registerActivity_(Activity activity, int[] pseudoTerminal) {
         TrackedActivity trackedActivity = new TrackedActivity();
-        trackedActivity.storeNativeFD(pseudoTerminal);
+        if (!trackedActivity.storePseudoTerminal(pseudoTerminal)) {
+            TerminalClientAPI.logUtils.error("failed to store Pseudo-Terminal");
+        };
         trackedActivity.packageName = activity.getPackageName();
-        trackedActivity.pid = JNI.getPid();
+        trackedActivity.pid = getPid();
+        trackedActivity.pidAsString = Integer.toString(trackedActivity.pid);
         PackageManager pm = activity.getPackageManager();
         ComponentName componentName = activity.getComponentName();
         ActivityInfo activityInfo;
@@ -275,10 +311,15 @@ public class TerminalControllerService implements ServiceConnection {
         }
         Bundle bundle = new Bundle();
         bundle.putParcelable("ACTIVITY", trackedActivity);
-        sendMessageToServer(TerminalService.MSG_REGISTER_ACTIVITY, bundle);
+        sendMessageToServer(MSG_REGISTER_ACTIVITY, bundle);
     }
 
     public void startTerminalActivity() {
-        sendMessageToServer(TerminalService.MSG_START_TERMINAL_ACTIVITY);
+        sendMessageToServer(MSG_START_TERMINAL_ACTIVITY);
+    }
+
+    public void connectToService(Activity activity) {
+        bindToTerminalService(activity);
+        registerActivity(activity, createPseudoTerminal());
     }
 }
