@@ -1,9 +1,6 @@
 ## Based on https://gist.github.com/iainconnor/8605514
 
 # Built application files
-app/.cxx/
-app/debug/
-app/release/
 build/
 *.apk
 .externalNativeBuild
