@@ -1,2 +1,3 @@
 include ':app'
 include ':cmddemo'
+include ':libclient-service'

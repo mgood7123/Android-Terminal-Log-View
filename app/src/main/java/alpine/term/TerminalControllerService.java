@@ -1,7 +1,6 @@
 package alpine.term;
 
 import android.app.Activity;
-import android.app.ActivityManager;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.ComponentName;
@@ -9,7 +8,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
 import android.content.pm.ActivityInfo;
-import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.graphics.Color;
@@ -23,12 +21,10 @@ import android.os.Looper;
 import android.os.Message;
 import android.os.Messenger;
 import android.os.RemoteException;
-import android.os.SystemClock;
 import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.TextUtils;
 import android.text.style.StyleSpan;
-import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
@@ -37,14 +33,13 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 
+import com.example.libclient_service.LibService_Messenger;
+
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Locale;
 
 import alpine.term.emulator.JNI;
 import alpine.term.emulator.TerminalSession;
-
-import static android.content.Context.ACTIVITY_SERVICE;
 
 public class TerminalControllerService implements ServiceConnection {
 
@@ -63,176 +58,13 @@ public class TerminalControllerService implements ServiceConnection {
     /** Flag indicating whether we have called bind on the service. */
     public boolean mIsBound;
 
-    // available for all threads somehow
-    final Object waitOnMe = new Object();
-
-    public void waitForReply() {
-        logUtils.log_Error("waiting for reply");
-        synchronized (waitOnMe) {
-            try {
-                waitOnMe.wait();
-            } catch (InterruptedException e) {
-                // we should have gotten our answer now.
-            }
-        }
-        logUtils.log_Error("replied");
-    }
-
-    HandlerThread ht = new HandlerThread("threadName");
-    Looper looper;
-    Handler handler;
-    Handler.Callback callback = new Handler.Callback() {
-
-        @SuppressWarnings("DuplicateBranchesInSwitch")
-        @Override
-        public boolean handleMessage(Message msg) {
-            logUtils.log_Error("received message");
-            switch (msg.what) {
-                case TerminalService.MSG_NO_REPLY:
-                    break;
-                case TerminalService.MSG_REGISTERED_CLIENT:
-                    logUtils.log_Error("registered");
-                    sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
-                    break;
-                case TerminalService.MSG_UNREGISTERED_CLIENT:
-                    logUtils.log_Error("unregistered");
-                    sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
-                    break;
-                case TerminalService.MSG_IS_SERVER_ALIVE:
-                    logUtils.log_Info("SERVER IS ALIVE");
-                    sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
-                    break;
-                case TerminalService.MSG_REGISTER_ACTIVITY_FAILED:
-                    sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
-                    break;
-                case TerminalService.MSG_REGISTERED_ACTIVITY:
-                    sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
-                    break;
-                case TerminalService.MSG_STARTED_TERMINAL_ACTIVITY:
-                    break;
-                default:
-                    sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
-                    break;
-            }
-            // handled messages are handled in background thread
-            // then notify about finished message.
-            synchronized (waitOnMe) {
-                waitOnMe.notifyAll();
-            }
-            return true;
-        }
-    };
-
-    public boolean sendMessageToServer(int what) {
-        return sendMessageToServer(null, what, 0, 0, null, null);
-    }
-
-    private boolean sendMessageToServer(int what, int arg1) {
-        return sendMessageToServer(null, what, arg1, 0, null, null);
-    }
-
-    private boolean sendMessageToServer(int what, int arg1, int arg2) {
-        return sendMessageToServer(null, what, arg1, arg2, null, null);
-    }
-
-    public boolean sendMessageToServer(int what, Object obj) {
-        return sendMessageToServer(null, what, 0, 0, obj, null);
-    }
-
-    private boolean sendMessageToServer(int what, int arg1, Object obj) {
-        return sendMessageToServer(null, what, arg1, 0, obj, null);
-    }
-
-    private boolean sendMessageToServer(int what, int arg1, int arg2, Object obj) {
-        return sendMessageToServer(null, what, arg1, arg2, obj, null);
-    }
-
-    public boolean sendMessageToServer(int what, Bundle bundle) {
-        return sendMessageToServer(null, what, 0, 0, null, bundle);
-    }
-
-    private boolean sendMessageToServer(int what, int arg1, Bundle bundle) {
-        return sendMessageToServer(null, what, arg1, 0, null, bundle);
-    }
-
-    private boolean sendMessageToServer(int what, int arg1, int arg2, Bundle bundle) {
-        return sendMessageToServer(null, what, arg1, arg2, null, bundle);
-    }
-
-    public boolean sendMessageToServer(int what, Object obj, Bundle bundle) {
-        return sendMessageToServer(null, what, 0, 0, obj, bundle);
-    }
-
-    private boolean sendMessageToServer(int what, int arg1, Object obj, Bundle bundle) {
-        return sendMessageToServer(null, what, arg1, 0, obj, bundle);
-    }
-
-    private boolean sendMessageToServer(int what, int arg1, int arg2, Object obj, Bundle bundle) {
-        return sendMessageToServer(null, what, arg1, arg2, obj, bundle);
-    }
-
-    public boolean sendMessageToServer(Handler handler, int what, int arg1, int arg2, Object obj, Bundle bundle) {
-        try {
-            Message msg = Message.obtain(handler, what, arg1, arg2, obj);
-            if (bundle != null) msg.setData(bundle);
-            msg.replyTo = mMessenger;
-            mService.send(msg);
-            waitForReply();
-            return true;
-        } catch (RemoteException e) {
-            // In this case the service has crashed before we could even
-            // do anything with it
-            return false;
-        }
-    }
-
-    public boolean sendMessageToServerNonBlocking(int what) {
-        return sendMessageToServerNonBlocking(null, what, 0, 0, null);
-    }
-
-    private boolean sendMessageToServerNonBlocking(int what, int arg1) {
-        return sendMessageToServerNonBlocking(null, what, arg1, 0, null);
-    }
-
-    private boolean sendMessageToServerNonBlocking(int what, int arg1, int arg2) {
-        return sendMessageToServerNonBlocking(null, what, arg1, arg2, null);
-    }
-
-    public boolean sendMessageToServerNonBlocking(int what, Object obj) {
-        return sendMessageToServerNonBlocking(null, what, 0, 0, obj);
-    }
-
-    private boolean sendMessageToServerNonBlocking(int what, int arg1, Object obj) {
-        return sendMessageToServerNonBlocking(null, what, arg1, 0, obj);
-    }
-
-    private boolean sendMessageToServerNonBlocking(int what, int arg1, int arg2, Object obj) {
-        return sendMessageToServerNonBlocking(null, what, arg1, arg2, obj);
-    }
-
-    public boolean sendMessageToServerNonBlocking(Handler handler, int what, int arg1, int arg2, Object obj) {
-        try {
-            Message msg = Message.obtain(handler, what, arg1, arg2, obj);
-            msg.replyTo = mMessenger;
-            mService.send(msg);
-            return true;
-        } catch (RemoteException e) {
-            // In this case the service has crashed before we could even
-            // do anything with it
-            return false;
-        }
-    }
-
-    /**
-     * Target we publish for clients to send messages to IncomingHandler.
-     */
-    Messenger mMessenger;
-
     private ArrayList<Runnable> runnableArrayList = new ArrayList<>();
 
     boolean isLocalService = false;
 
     Context context = null;
+
+    LibService_Messenger libService_messenger = new LibService_Messenger();
 
     @Override
     public void onServiceConnected(ComponentName componentName, IBinder boundService) {
@@ -245,20 +77,42 @@ public class TerminalControllerService implements ServiceConnection {
             logUtils.log_Info("binded to local service");
             isLocalService = true;
         } else {
-            mService = new Messenger(boundService);
-            logUtils.log_Info("binded to remote service");
-            if (ht.getState() == Thread.State.NEW) {
-                ht.start();
-                looper = ht.getLooper();
-                handler = new Handler(looper, callback);
-                mMessenger = new Messenger(handler);
-                logUtils.log_Info("started messenger");
-            }
-
+            libService_messenger
+                .addResponse(TerminalService.MSG_NO_REPLY)
+                .addResponse(TerminalService.MSG_REGISTERED_CLIENT, () -> {
+                    libService_messenger.log.log_Info("registered");
+                    libService_messenger.sendMessageToServerNonBlocking(
+                        TerminalService.MSG_CALLBACK_INVOKED
+                    );
+                })
+                .addResponse(TerminalService.MSG_UNREGISTERED_CLIENT, () -> {
+                    libService_messenger.log.log_Info("unregistered");
+                    libService_messenger.sendMessageToServerNonBlocking(
+                        TerminalService.MSG_CALLBACK_INVOKED
+                    );
+                })
+                .addResponse(TerminalService.MSG_UNREGISTERED_CLIENT, () -> {
+                    libService_messenger.log.log_Info("SERVER IS ALIVE");
+                    libService_messenger.sendMessageToServerNonBlocking(
+                        TerminalService.MSG_CALLBACK_INVOKED
+                    );
+                })
+                .addResponse(TerminalService.MSG_REGISTER_ACTIVITY_FAILED, () -> {
+                    libService_messenger.sendMessageToServerNonBlocking(
+                        TerminalService.MSG_CALLBACK_INVOKED
+                    );
+                })
+                .addResponse(TerminalService.MSG_REGISTERED_ACTIVITY, () -> {
+                    libService_messenger.sendMessageToServerNonBlocking(
+                        TerminalService.MSG_CALLBACK_INVOKED
+                    );
+                })
+                .addResponse(TerminalService.MSG_STARTED_TERMINAL_ACTIVITY);
+            libService_messenger.start(boundService);
             // We want to monitor the service for as long as we are
             // connected to it.
             logUtils.log_Info("registering");
-            sendMessageToServer(TerminalService.MSG_REGISTER_CLIENT);
+            libService_messenger.sendMessageToServer(TerminalService.MSG_REGISTER_CLIENT);
             if (terminalController != null) {
                 if (terminalController.activity == null) {
                     logUtils.log_Error("activity has not been started");
@@ -605,13 +459,10 @@ public class TerminalControllerService implements ServiceConnection {
     }
 
     public void registerActivity(final Activity activity, final int[] pseudoTerminal) {
-        runWhenConnectedToService(new Runnable() {
-            @Override
-            public void run() {
-                logUtils.log_Error("REGISTERING ACTIVITY");
-                registerActivity_(activity, pseudoTerminal);
-                logUtils.log_Error("REGISTERED ACTIVITY");
-            }
+        runWhenConnectedToService(() -> {
+            logUtils.log_Error("REGISTERING ACTIVITY");
+            registerActivity_(activity, pseudoTerminal);
+            logUtils.log_Error("REGISTERED ACTIVITY");
         });
     }
 
@@ -639,15 +490,16 @@ public class TerminalControllerService implements ServiceConnection {
         }
         Bundle bundle = new Bundle();
         bundle.putParcelable("ACTIVITY", trackedActivity);
-        sendMessageToServer(TerminalService.MSG_REGISTER_ACTIVITY, bundle);
+        libService_messenger.sendMessageToServer(TerminalService.MSG_REGISTER_ACTIVITY, bundle);
     }
 
     public void startTerminalActivity() {
-        runWhenConnectedToService(new Runnable() {
-            @Override
-            public void run() {
-                sendMessageToServer(TerminalService.MSG_START_TERMINAL_ACTIVITY);
+        runWhenConnectedToService(
+            () -> {
+                libService_messenger.sendMessageToServer(
+                    TerminalService.MSG_START_TERMINAL_ACTIVITY
+                );
             }
-        });
+        );
     }
 }
