@@ -51,6 +51,8 @@ import java.util.Stack;
  */
 public final class TerminalEmulator {
 
+    public boolean isLogView;
+
     /** Log unknown or unimplemented escape sequences received from the shell process. */
     private static final boolean LOG_ESCAPE_SEQUENCES = false;
 
@@ -526,6 +528,11 @@ public final class TerminalEmulator {
                 mCursorCol = nextTabStop(1);
                 break;
             case 10: // Line feed (LF, \n).
+                doLinefeed();
+                // some times the terminal may glitch and not reset the cursor when a new line
+                // occurs, make sure the cursor is reset when a new line occurs
+                if (isLogView) processByte(Integer.valueOf('\r').byteValue());
+                break;
             case 11: // Vertical tab (VT, \v).
             case 12: // Form feed (FF, \f).
                 doLinefeed();

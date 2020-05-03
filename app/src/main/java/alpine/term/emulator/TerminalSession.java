@@ -42,6 +42,7 @@ import java.util.Locale;
 import java.util.UUID;
 
 import alpine.term.Config;
+import alpine.term.LogUtils;
 import alpine.term.TrackedActivity;
 
 import static alpine.term.TrackedActivity.wrapFileDescriptor;
@@ -121,6 +122,8 @@ public final class TerminalSession extends TerminalOutput {
 
     /** Set by the application for user identification of session, not by terminal. */
     public String mSessionName;
+
+    LogUtils logUtils = new LogUtils("Terminal Session");
 
     @SuppressLint("HandlerLeak")
     final Handler mMainThreadHandler = new Handler() {
@@ -362,6 +365,8 @@ public final class TerminalSession extends TerminalOutput {
         mEmulator = new TerminalEmulator(this, columns, rows, /* transcript= */5000);
 
         if (isLogView) {
+            // should this be true for a shell as well?
+            mEmulator.isLogView = true;
             if (
                 mShellPath.contentEquals("/bin/logcat") ||
                 mShellPath.contentEquals("/sbin/su") ||
