@@ -22,8 +22,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 package alpine.term.emulator;
 
+import alpine.term.LogUtils;
+
 /** A circular byte buffer allowing one producer and one consumer thread. */
 final class ByteQueue {
+
+    LogUtils logUtils = new LogUtils("Byte Queue");
 
     private final byte[] mBuffer;
     private int mHead;

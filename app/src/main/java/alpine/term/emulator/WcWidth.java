@@ -22,12 +22,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 package alpine.term.emulator;
 
+import alpine.term.LogUtils;
+
 /**
  * Implementation of wcwidth(3) for Unicode 9.
  *
  * Implementation from https://github.com/jquast/wcwidth but we return 0 for unprintable characters.
  */
 public final class WcWidth {
+
+    LogUtils logUtils = new LogUtils("Wide Character Width");
 
     // From https://github.com/jquast/wcwidth/blob/master/wcwidth/table_zero.py
     // t commit 0d7de112202cc8b2ebe9232ff4a5c954f19d561a (2016-07-02):

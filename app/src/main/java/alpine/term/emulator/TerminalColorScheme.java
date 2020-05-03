@@ -25,6 +25,8 @@ package alpine.term.emulator;
 import java.util.Map;
 import java.util.Properties;
 
+import alpine.term.LogUtils;
+
 /**
  * Color scheme for a terminal with default colors, which may be overridden (and then reset) from the shell using
  * Operating System Control (OSC) sequences.
@@ -32,6 +34,8 @@ import java.util.Properties;
  * @see TerminalColors
  */
 public final class TerminalColorScheme {
+
+    LogUtils logUtils = new LogUtils("Terminal Color Scheme");
 
     /** http://upload.wikimedia.org/wikipedia/en/1/15/Xterm_256color_chart.svg, but with blue color brighter. */
     private static final int[] DEFAULT_COLORSCHEME = {

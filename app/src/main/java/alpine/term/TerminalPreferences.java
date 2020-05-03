@@ -29,6 +29,8 @@ import alpine.term.emulator.TerminalSession;
 @SuppressWarnings("WeakerAccess")
 final class TerminalPreferences {
 
+    LogUtils logUtils = new LogUtils("Terminal Preferences");
+
     private static final String CURRENT_SESSION_KEY = "current_session";
     private static final String SHOW_EXTRA_KEYS_KEY = "show_extra_keys";
     private static final String IGNORE_BELL = "ignore_bell";

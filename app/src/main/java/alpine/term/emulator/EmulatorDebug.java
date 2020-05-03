@@ -24,7 +24,12 @@ package alpine.term.emulator;
 
 import android.util.Log;
 
+import alpine.term.LogUtils;
+
 public final class EmulatorDebug {
+
+    LogUtils logUtils = new LogUtils("Emulator Debug");
+
     /** The tag to use with {@link Log}. */
     public static final String LOG_TAG = "alpine-term:emulator";
 }

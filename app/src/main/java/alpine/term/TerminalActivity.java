@@ -47,6 +47,8 @@ import android.widget.TextView;
  */
 public final class TerminalActivity extends Activity {
 
+    LogUtils logUtils = new LogUtils("Terminal Activity");
+
     TerminalController terminalController;
 
     @Override

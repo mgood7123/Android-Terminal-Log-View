@@ -37,6 +37,8 @@ import alpine.term.terminal_view.TerminalViewClient;
 @SuppressWarnings("WeakerAccess")
 public final class InputDispatcher implements TerminalViewClient {
 
+    LogUtils logUtils = new LogUtils("Input Dispatcher");
+
     private final Context context;
 
     /** Keeping track of the special keys acting as Ctrl and Fn for the soft keyboard and other hardware keys. */

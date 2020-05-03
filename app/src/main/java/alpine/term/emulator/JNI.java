@@ -22,10 +22,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 package alpine.term.emulator;
 
+import alpine.term.LogUtils;
+
 /**
  * Native methods for creating and managing pseudoterminal subprocesses. C code is in jni/terminal_jni.c.
  */
 public final class JNI {
+
+    LogUtils logUtils = new LogUtils("JNI");
 
     static {
         System.loadLibrary("terminal_jni");

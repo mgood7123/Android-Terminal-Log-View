@@ -27,6 +27,7 @@ import android.graphics.Paint;
 import android.graphics.PorterDuff;
 import android.graphics.Typeface;
 
+import alpine.term.LogUtils;
 import alpine.term.emulator.TerminalBuffer;
 import alpine.term.emulator.TerminalEmulator;
 import alpine.term.emulator.TerminalRow;
@@ -39,6 +40,8 @@ import alpine.term.emulator.WcWidth;
  * Saves font metrics, so needs to be recreated each time the typeface or font size changes.
  */
 final class TerminalRenderer {
+
+    LogUtils logUtils = new LogUtils("Terminal Renderer");
 
     final int mTextSize;
     final Typeface mTypeface;

@@ -24,8 +24,12 @@ package alpine.term.emulator;
 
 import java.nio.charset.StandardCharsets;
 
+import alpine.term.LogUtils;
+
 /** A client which receives callbacks from events triggered by feeding input to a {@link TerminalEmulator}. */
 public abstract class TerminalOutput {
+
+    LogUtils logUtils = new LogUtils("Terminal Output");
 
     /** Write a string using the UTF-8 encoding to the terminal client. */
     public final void write(String data) {

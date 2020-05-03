@@ -55,6 +55,9 @@ import alpine.term.emulator.TextStyle;
 import alpine.term.terminal_view.TerminalView;
 
 public class TerminalController {
+
+    LogUtils logUtils = new LogUtils("Terminal Controller");
+
     /**
      * The main view of the activity showing the terminal. Initialized in onCreate().
      */
@@ -351,14 +354,14 @@ public class TerminalController {
             try (InputStream in = assetManager.open("color_schemes/" + fileName)) {
                 props.load(in);
             } catch (IOException e) {
-                Log.e(Config.APP_LOG_TAG, "failed to load color scheme file '" + fileName + "' from assets", e);
+                logUtils.log_Error("failed to load color scheme file '" + fileName + "' from assets", e);
             }
         }
 
         try {
             TerminalColors.COLOR_SCHEME.updateWith(props);
         } catch (Exception e) {
-            Log.e(Config.APP_LOG_TAG, "failed to update terminal color scheme", e);
+            logUtils.log_Error("failed to update terminal color scheme", e);
         }
 
         if (mTermService != null) {
@@ -466,8 +469,8 @@ public class TerminalController {
 
             boolean targetVisibility = mSettings.isExtraKeysEnabled();
             boolean actualvisibility = viewPager.getVisibility() == View.VISIBLE;
-            Log.e(Config.APP_LOG_TAG, "targetVisibility visibility = " + targetVisibility);
-            Log.e(Config.APP_LOG_TAG, "actual visibility = " + actualvisibility);
+            logUtils.log_Info("targetVisibility visibility = " + targetVisibility);
+            logUtils.log_Info("actual visibility = " + actualvisibility);
 
             if (session.isShell()) {
                 if (targetVisibility == true)
@@ -491,18 +494,18 @@ public class TerminalController {
      */
 
     public void switchToSession(TerminalSession currentSession, TerminalSession targetSession) {
-        Log.d(Config.APP_LOG_TAG, "current session = " + currentSession);
-        Log.d(Config.APP_LOG_TAG, "target session = " + targetSession);
+        logUtils.log_Info("current session = " + currentSession);
+        logUtils.log_Info("target session = " + targetSession);
         if (currentSession == null) {
-            Log.d(Config.APP_LOG_TAG, "current session is null");
+            logUtils.log_Info("current session is null");
             switchToSession(targetSession);
         } else {
             if (currentSession != targetSession) {
-                Log.e(Config.APP_LOG_TAG, "current session and target session are not the same");
+                logUtils.log_Info("current session and target session are not the same");
                 previousSession = currentSession;
                 switchToSession(targetSession);
             } else {
-                Log.e(Config.APP_LOG_TAG, "current session and target session are the same");
+                logUtils.log_Info("current session and target session are the same");
             }
         }
     }

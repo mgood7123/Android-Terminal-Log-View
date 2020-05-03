@@ -19,13 +19,14 @@ import android.os.RemoteException;
 import java.util.ArrayList;
 
 public class TerminalClientAPI implements ServiceConnection {
+
+    LogUtils logUtils = new LogUtils("Terminal Client Api");
+
     static {
         System.loadLibrary("terminal_jni");
     }
     public static native int getPid();
     public static native int[] createPseudoTerminal();
-
-    public static LogUtils logUtils = new LogUtils("TERMINAL CLIENT");
 
     /**
      * Command to the service to register a client, receiving callbacks
@@ -229,20 +230,20 @@ public class TerminalClientAPI implements ServiceConnection {
 
     @Override
     public void onServiceConnected(ComponentName componentName, IBinder boundService) {
-        logUtils.log_Info("onServiceConnected() has been called");
+        logUtils.logMethodName_Info();
         mService = new Messenger(boundService);
-        logUtils.log_Info("CLIENT: BINDED TO REMOTE SERVICE");
+        logUtils.log_Info("BINDED TO REMOTE SERVICE");
         if (ht.getState() == Thread.State.NEW) {
             ht.start();
             looper = ht.getLooper();
             handler = new Handler(looper, callback);
             mMessenger = new Messenger(handler);
-            logUtils.log_Info("CLIENT: STARTED MESSENGER");
+            logUtils.log_Info("STARTED MESSENGER");
         }
 
         // We want to monitor the service for as long as we are
         // connected to it.
-        logUtils.log_Info("CLIENT: registering");
+        logUtils.log_Info("registering");
         sendMessageToServer(MSG_REGISTER_CLIENT);
 
         for (Runnable action : runnableArrayList) {
@@ -253,7 +254,7 @@ public class TerminalClientAPI implements ServiceConnection {
 
     @Override
     public void onServiceDisconnected(ComponentName name) {
-        // TODO
+        logUtils.logMethodName_Info();
     }
 
     public void runWhenConnectedToService(Runnable runnable) {
@@ -288,7 +289,7 @@ public class TerminalClientAPI implements ServiceConnection {
     private void registerActivity_(Activity activity, int[] pseudoTerminal) {
         TrackedActivity trackedActivity = new TrackedActivity();
         if (!trackedActivity.storePseudoTerminal(pseudoTerminal)) {
-            TerminalClientAPI.logUtils.error("failed to store Pseudo-Terminal");
+            logUtils.errorAndThrow("failed to store Pseudo-Terminal");
         };
         trackedActivity.packageName = activity.getPackageName();
         trackedActivity.pid = getPid();

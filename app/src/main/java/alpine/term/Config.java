@@ -26,6 +26,9 @@ import android.content.Context;
  */
 @SuppressWarnings("WeakerAccess")
 public class Config {
+
+    LogUtils logUtils = new LogUtils("Config");
+
     /**
      * Name of CD-ROM image file.
      * Must be a name of file located in assets directory.

@@ -22,8 +22,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 package alpine.term.emulator;
 
+import alpine.term.LogUtils;
+
 /** Current terminal colors (if different from default). */
 public final class TerminalColors {
+
+    LogUtils logUtils = new LogUtils("Terminal Colors");
 
     /** Static data - a bit ugly but ok for now. */
     public static final TerminalColorScheme COLOR_SCHEME = new TerminalColorScheme();

@@ -70,6 +70,9 @@ import alpine.term.emulator.WcWidth;
 /** View displaying and interacting with a {@link TerminalSession}. */
 public final class TerminalView extends View {
 
+    LogUtils logUtils = new LogUtils("Terminal View");
+    LogUtils logUtilsInput = new LogUtils("Terminal View Input");
+
     /** Log view key and IME events. */
     private static final boolean LOG_KEY_EVENTS = false;
 
@@ -271,7 +274,7 @@ public final class TerminalView extends View {
 
             @Override
             public boolean finishComposingText() {
-                if (LOG_KEY_EVENTS) Log.i(Config.INPUT_LOG_TAG, "finishComposingText()");
+                if (LOG_KEY_EVENTS) logUtilsInput.log_Info("finishComposingText()");
                 super.finishComposingText();
 
                 sendTextToTerminal(getEditable());
@@ -282,7 +285,7 @@ public final class TerminalView extends View {
             @Override
             public boolean commitText(CharSequence text, int newCursorPosition) {
                 if (LOG_KEY_EVENTS) {
-                    Log.i(Config.INPUT_LOG_TAG, "commitText(\"" + text + "\", " + newCursorPosition + ")");
+                    logUtilsInput.log_Info("commitText(\"" + text + "\", " + newCursorPosition + ")");
                 }
                 super.commitText(text, newCursorPosition);
 
@@ -297,7 +300,7 @@ public final class TerminalView extends View {
             @Override
             public boolean deleteSurroundingText(int leftLength, int rightLength) {
                 if (LOG_KEY_EVENTS) {
-                    Log.i(Config.INPUT_LOG_TAG, "deleteSurroundingText(" + leftLength + ", " + rightLength + ")");
+                    logUtilsInput.log_Info("deleteSurroundingText(" + leftLength + ", " + rightLength + ")");
                 }
                 // The stock Samsung keyboard with 'Auto check spelling' enabled sends leftLength > 1.
                 KeyEvent deleteKey = new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DEL);
@@ -419,8 +422,6 @@ public final class TerminalView extends View {
             });
         }
     }
-
-    LogUtils logUtils = new LogUtils("TerminalView");
 
     /**
      * Attach a {@link TerminalSession} to this view.
@@ -596,7 +597,7 @@ public final class TerminalView extends View {
     @Override
     public boolean onKeyPreIme(int keyCode, KeyEvent event) {
         if (LOG_KEY_EVENTS)
-            Log.i(Config.INPUT_LOG_TAG, "onKeyPreIme(keyCode=" + keyCode + ", event=" + event + ")");
+            logUtilsInput.log_Info("onKeyPreIme(keyCode=" + keyCode + ", event=" + event + ")");
         if (keyCode == KeyEvent.KEYCODE_BACK) {
             if (mIsSelectingText) {
                 stopTextSelectionMode();
@@ -609,7 +610,7 @@ public final class TerminalView extends View {
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (LOG_KEY_EVENTS)
-            Log.i(Config.INPUT_LOG_TAG, "onKeyDown(keyCode=" + keyCode + ", isSystem()=" + event.isSystem() + ", event=" + event + ")");
+            logUtilsInput.log_Info("onKeyDown(keyCode=" + keyCode + ", isSystem()=" + event.isSystem() + ", event=" + event + ")");
         if (mEmulator == null) return true;
         stopTextSelectionMode();
 
@@ -641,7 +642,7 @@ public final class TerminalView extends View {
         if (event.isAltPressed() || leftAltDown) keyMod |= KeyHandler.KEYMOD_ALT;
         if (event.isShiftPressed()) keyMod |= KeyHandler.KEYMOD_SHIFT;
         if (!event.isFunctionPressed() && handleKeyCode(keyCode, keyMod)) {
-            if (LOG_KEY_EVENTS) Log.i(Config.INPUT_LOG_TAG, "handleKeyCode() took key event");
+            if (LOG_KEY_EVENTS) logUtilsInput.log_Info("handleKeyCode() took key event");
             return true;
         }
 
@@ -657,7 +658,7 @@ public final class TerminalView extends View {
 
         int result = event.getUnicodeChar(effectiveMetaState);
         if (LOG_KEY_EVENTS)
-            Log.i(Config.INPUT_LOG_TAG, "KeyEvent#getUnicodeChar(" + effectiveMetaState + ") returned: " + result);
+            logUtilsInput.log_Info("KeyEvent#getUnicodeChar(" + effectiveMetaState + ") returned: " + result);
         if (result == 0) {
             return false;
         }
@@ -684,7 +685,7 @@ public final class TerminalView extends View {
 
     public void inputCodePoint(int codePoint, boolean controlDownFromEvent, boolean leftAltDownFromEvent) {
         if (LOG_KEY_EVENTS) {
-            Log.i(Config.INPUT_LOG_TAG, "inputCodePoint(codePoint=" + codePoint + ", controlDownFromEvent=" + controlDownFromEvent + ", leftAltDownFromEvent="
+            logUtilsInput.log_Info("inputCodePoint(codePoint=" + codePoint + ", controlDownFromEvent=" + controlDownFromEvent + ", leftAltDownFromEvent="
                 + leftAltDownFromEvent + ")");
         }
 
@@ -763,7 +764,7 @@ public final class TerminalView extends View {
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
         if (LOG_KEY_EVENTS)
-            Log.i(Config.INPUT_LOG_TAG, "onKeyUp(keyCode=" + keyCode + ", event=" + event + ")");
+            logUtilsInput.log_Info("onKeyUp(keyCode=" + keyCode + ", event=" + event + ")");
         if (mEmulator == null) return true;
 
         if (mClient != null) if (mClient.onKeyUp(keyCode, event)) {

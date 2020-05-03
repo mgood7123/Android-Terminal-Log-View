@@ -15,6 +15,9 @@ import java.lang.reflect.Field;
  */
 @SuppressWarnings("WeakerAccess")
 public class TrackedActivity implements Parcelable {
+
+    static LogUtils logUtils = new LogUtils("Tracked Activity");
+
     TrackedActivity() {}
     public ActivityInfo activityInfo = null;
     public String packageName = "<INVALID>";
@@ -45,10 +48,7 @@ public class TrackedActivity implements Parcelable {
             descriptorField.set(result, fd);
             descriptorField.setAccessible(originalAccessibility);
         } catch (NoSuchFieldException | IllegalAccessException | IllegalArgumentException e) {
-            Log.wtf(
-                "wrapFileDescriptor",
-                "error accessing FileDescriptor#descriptor private field", e
-            );
+            logUtils.log_Error("error accessing FileDescriptor#descriptor private field", e);
             return null;
         }
         return result;
@@ -74,10 +74,7 @@ public class TrackedActivity implements Parcelable {
             fd = descriptorField.getInt(fileDescriptor);
             descriptorField.setAccessible(originalAccessibility);
         } catch (NoSuchFieldException | IllegalAccessException | IllegalArgumentException e) {
-            Log.wtf(
-                "unwrapFileDescriptor",
-                "error accessing FileDescriptor#descriptor private field", e
-            );
+            logUtils.log_Error("error accessing FileDescriptor#descriptor private field", e);
             return -1;
         }
         return fd;

@@ -42,6 +42,30 @@ public class LogUtils {
         return Log.wtf(TAG, message);
     }
 
+    public int log_Debug(String message, Throwable throwable) {
+        return Log.d(TAG, message, throwable);
+    }
+
+    public int log_Verbose(String message, Throwable throwable) {
+        return Log.v(TAG, message, throwable);
+    }
+
+    public int log_Info(String message, Throwable throwable) {
+        return Log.i(TAG, message, throwable);
+    }
+
+    public int log_Warning(String message, Throwable throwable) {
+        return Log.w(TAG, message, throwable);
+    }
+
+    public int log_Error(String message, Throwable throwable) {
+        return Log.e(TAG, message, throwable);
+    }
+
+    public int log_What_A_Terrible_Failure(String message, Throwable throwable) {
+        return Log.wtf(TAG, message, throwable);
+    }
+
     /**
      * Fails a test with the given message.
      *

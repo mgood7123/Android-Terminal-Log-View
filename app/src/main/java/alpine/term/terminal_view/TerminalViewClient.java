@@ -26,6 +26,7 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 
+import alpine.term.LogUtils;
 import alpine.term.emulator.TerminalSession;
 
 /**
@@ -34,6 +35,9 @@ import alpine.term.emulator.TerminalSession;
  * <p/>
  */
 public interface TerminalViewClient {
+
+    LogUtils logUtils = new LogUtils("Terminal View Client");
+
     /**
      * Callback function on scale events according to {@link ScaleGestureDetector#getScaleFactor()}.
      */

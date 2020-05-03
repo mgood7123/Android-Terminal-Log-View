@@ -35,6 +35,8 @@ import android.os.VibrationEffect;
 @SuppressWarnings("WeakerAccess")
 public class Bell {
 
+    LogUtils logUtils = new LogUtils("Bell");
+
     private static final long DURATION = 50;
     private static final long MIN_PAUSE = 3 * DURATION;
     private static final Object LOCK = new Object();

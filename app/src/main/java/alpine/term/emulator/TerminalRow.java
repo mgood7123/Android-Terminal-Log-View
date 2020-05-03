@@ -24,12 +24,16 @@ package alpine.term.emulator;
 
 import java.util.Arrays;
 
+import alpine.term.LogUtils;
+
 /**
  * A row in a terminal, composed of a fixed number of cells.
  * <p>
  * The text in the row is stored in a char[] array, {@link #mText}, for quick access during rendering.
  */
 public final class TerminalRow {
+
+    LogUtils logUtils = new LogUtils("Terminal Row");
 
     private static final float SPARE_CAPACITY_FACTOR = 1.5f;
 

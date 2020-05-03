@@ -22,6 +22,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 package alpine.term.emulator;
 
+import alpine.term.LogUtils;
+
 /**
  * <p>
  * Encodes effects, foreground and background colors into a 64 bit long, which are stored for each cell in a terminal
@@ -35,6 +37,8 @@ package alpine.term.emulator;
  * - 24 for background color (only 9 first bits if a color index).
  */
 public final class TextStyle {
+
+    LogUtils logUtils = new LogUtils("Text Style");
 
     public final static int CHARACTER_ATTRIBUTE_BOLD = 1;
     public final static int CHARACTER_ATTRIBUTE_ITALIC = 1 << 1;

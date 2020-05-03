@@ -53,6 +53,8 @@ import alpine.term.LogUtils;
  */
 public final class TerminalEmulator {
 
+    LogUtils logUtils = new LogUtils("Terminal Emulator");
+
     public boolean isLogView;
 
     public final int MAX_FONTSIZE = 256;
@@ -350,8 +352,6 @@ public final class TerminalEmulator {
             }
         }
     }
-
-    LogUtils logUtils = new LogUtils("Terminal Emulator");
 
     public void resize(int columns, int rows) {
         if (mRows == rows && mColumns == columns) {
@@ -788,7 +788,7 @@ public final class TerminalEmulator {
                                 if (internalBit == -1) {
                                     value = isDecsetInternalBitSet(internalBit) ? 1 : 2; // 1=set, 2=reset.
                                 } else {
-                                    Log.e(EmulatorDebug.LOG_TAG, "got DECRQM for unrecognized private DEC mode=" + mode);
+                                    logUtils.log_Error("got DECRQM for unrecognized private DEC mode=" + mode);
                                     value = 0; // 0=not recognized, 3=permanently set, 4=permanently reset
                                 }
                             }
@@ -925,7 +925,7 @@ public final class TerminalEmulator {
                                     case "&8": // Undo key - ignore.
                                         break;
                                     default:
-                                        Log.w(EmulatorDebug.LOG_TAG, "unhandled termcap/terminfo name: '" + trans + "'");
+                                        logUtils.log_Error("unhandled termcap/terminfo name: '" + trans + "'");
                                 }
                                 // Respond with invalid request:
                                 mSession.write("\033P0+r" + part + "\033\\");
@@ -937,12 +937,12 @@ public final class TerminalEmulator {
                                 mSession.write("\033P1+r" + part + "=" + hexEncoded + "\033\\");
                             }
                         } else {
-                            Log.e(EmulatorDebug.LOG_TAG, "invalid device termcap/terminfo name of odd length: " + part);
+                            logUtils.log_Error("invalid device termcap/terminfo name of odd length: " + part);
                         }
                     }
                 } else {
                     if (LOG_ESCAPE_SEQUENCES)
-                        Log.e(EmulatorDebug.LOG_TAG, "unrecognized device control string: " + dcs);
+                        logUtils.log_Error("unrecognized device control string: " + dcs);
                 }
                 finishSequence();
             }
@@ -1032,7 +1032,7 @@ public final class TerminalEmulator {
                     int externalBit = mArgs[i];
                     int internalBit = mapDecSetBitToInternalBit(externalBit);
                     if (internalBit == -1) {
-                        Log.w(EmulatorDebug.LOG_TAG, "ignoring request to save/recall decset bit=" + externalBit);
+                        logUtils.log_Warning("ignoring request to save/recall decset bit=" + externalBit);
                     } else {
                         if (b == 's') {
                             mSavedDecSetFlags |= internalBit;
@@ -1219,7 +1219,7 @@ public final class TerminalEmulator {
                 // (1) enables this feature for keys except for those with well-known behavior, e.g., Tab, Backarrow and
                 // some special control character cases, e.g., Control-Space to make a NUL.
                 // (2) enables this feature for keys including the exceptions listed.
-                Log.e(EmulatorDebug.LOG_TAG, "(ignored) CSI > MODIFY RESOURCE: " + getArg0(-1) + " to " + getArg1(-1));
+                logUtils.log_Error("(ignored) CSI > MODIFY RESOURCE: " + getArg0(-1) + " to " + getArg1(-1));
                 break;
             default:
                 parseArg(b);
@@ -1763,7 +1763,7 @@ public final class TerminalEmulator {
                 int firstArg = mArgs[i + 1];
                 if (firstArg == 2) {
                     if (i + 4 > mArgIndex) {
-                        Log.w(EmulatorDebug.LOG_TAG, "too few CSI" + code + ";2 RGB arguments");
+                        logUtils.log_Error("too few CSI" + code + ";2 RGB arguments");
                     } else {
                         int red = mArgs[i + 2], green = mArgs[i + 3], blue = mArgs[i + 4];
                         if (red < 0 || green < 0 || blue < 0 || red > 255 || green > 255 || blue > 255) {
@@ -1788,7 +1788,7 @@ public final class TerminalEmulator {
                             mBackColor = color;
                         }
                     } else {
-                        if (LOG_ESCAPE_SEQUENCES) Log.w(EmulatorDebug.LOG_TAG, "invalid color index: " + color);
+                        if (LOG_ESCAPE_SEQUENCES) logUtils.log_Error("invalid color index: " + color);
                     }
                 } else {
                     finishSequenceAndLogError("Invalid ISO-8613-3 SGR first argument: " + firstArg);
@@ -1805,7 +1805,7 @@ public final class TerminalEmulator {
                 mBackColor = code - 100 + 8;
             } else {
                 if (LOG_ESCAPE_SEQUENCES)
-                    Log.w(EmulatorDebug.LOG_TAG, String.format("SGR unknown code %d", code));
+                    logUtils.log_Error(String.format("SGR unknown code %d", code));
             }
         }
     }
@@ -1939,7 +1939,7 @@ public final class TerminalEmulator {
                     String clipboardText = new String(Base64.decode(textParameter.substring(startIndex), 0), StandardCharsets.UTF_8);
                     mSession.clipboardText(clipboardText);
                 } catch (Exception e) {
-                    Log.e(EmulatorDebug.LOG_TAG, "OSC Manipulate selection, invalid string '" + textParameter + "");
+                    logUtils.log_Error("OSC Manipulate selection, invalid string '" + textParameter + "");
                 }
                 break;
             case 104:
@@ -2135,7 +2135,7 @@ public final class TerminalEmulator {
     }
 
     private void finishSequenceAndLogError(String error) {
-        if (LOG_ESCAPE_SEQUENCES) Log.w(EmulatorDebug.LOG_TAG, error);
+        if (LOG_ESCAPE_SEQUENCES) logUtils.log_Error(error);
         finishSequence();
     }
 

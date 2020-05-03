@@ -27,11 +27,15 @@ import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 
+import alpine.term.LogUtils;
+
 /**
  * A combination of {@link GestureDetector} and {@link ScaleGestureDetector}.
  */
 @SuppressWarnings("WeakerAccess")
 final class GestureAndScaleRecognizer {
+
+    LogUtils logUtils = new LogUtils("Gesture And Scale Recognizer");
 
     @SuppressWarnings("UnusedReturnValue")
     public interface Listener {

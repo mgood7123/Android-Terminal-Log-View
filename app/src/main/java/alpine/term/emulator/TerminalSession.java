@@ -60,6 +60,8 @@ import static alpine.term.TrackedActivity.wrapFileDescriptor;
  */
 public final class TerminalSession extends TerminalOutput {
 
+    LogUtils logUtils = new LogUtils("Terminal Session");
+
     /**
      * true if this is associated with a client, otherwise false
      */
@@ -122,8 +124,6 @@ public final class TerminalSession extends TerminalOutput {
 
     /** Set by the application for user identification of session, not by terminal. */
     public String mSessionName;
-
-    LogUtils logUtils = new LogUtils("Terminal Session");
 
     @SuppressLint("HandlerLeak")
     final Handler mMainThreadHandler = new Handler() {
@@ -208,7 +208,7 @@ public final class TerminalSession extends TerminalOutput {
             while (true) {
                 int bytesToWrite = mTerminalToProcessIOQueue.read(buffer, true);
                 if (bytesToWrite == -1) {
-                    Log.wtf(EmulatorDebug.LOG_TAG, "stdin writer return -1");
+                    logUtils.log_Error("stdin writer return -1");
                     return;
                 }
                 termOut.write(buffer, 0, bytesToWrite);
@@ -219,13 +219,13 @@ public final class TerminalSession extends TerminalOutput {
     }
     
     public void createShellSession(int columns, int rows) {
-        Log.w(EmulatorDebug.LOG_TAG, "creating shell");
+        logUtils.log_Info("creating shell");
         logUtils.errorAndThrowIfNull(mArgs);
         logUtils.errorAndThrowIfNull(mEnv);
         int[] processId = new int[1];
         mTerminalFileDescriptor = JNI.createSubprocess(mShellPath, mCwd, mArgs, mEnv, processId, rows, columns);
         mShellPid = processId[0];
-        Log.w(EmulatorDebug.LOG_TAG, "created shell");
+        logUtils.log_Info("created shell");
 
         final FileDescriptor terminalFileDescriptorWrapped = wrapFileDescriptor(mTerminalFileDescriptor);
         if (terminalFileDescriptorWrapped == null) throw new NullPointerException();
@@ -238,11 +238,11 @@ public final class TerminalSession extends TerminalOutput {
                     while (true) {
                         int read = termIn.read(buffer);
                         if (read == -1) {
-                            Log.wtf(EmulatorDebug.LOG_TAG, "stdout/stderr reader return -1");
+                            logUtils.log_Error("stdout/stderr reader return -1");
                             return;
                         }
                         if (!mProcessToTerminalIOQueue.write(buffer, 0, read)) {
-                            Log.wtf(EmulatorDebug.LOG_TAG, "stdout/stderr reader [write] returned false (closed)");
+                            logUtils.log_Error("stdout/stderr reader [write] returned false (closed)");
                             return;
                         }
                         mMainThreadHandler.sendEmptyMessage(MSG_NEW_INPUT);
@@ -262,23 +262,23 @@ public final class TerminalSession extends TerminalOutput {
     }
 
     public void createLogSession(int columns, int rows, Context context) {
-        Log.w(EmulatorDebug.LOG_TAG, "creating log");
+        logUtils.log_Info("creating log");
         final FileDescriptor terminalFileDescriptorWrapped;
         if (isTrackedActivity) {
-            Log.w(EmulatorDebug.LOG_TAG, "using existing FileDescriptor");
+            logUtils.log_Info("using existing FileDescriptor");
             if (trackedActivity.pseudoTerminalMaster == null) {
-                Log.wtf(EmulatorDebug.LOG_TAG, "SERVER: ERROR: activity.pseudoTerminal IS NULL");
+                logUtils.log_Info("SERVER: ERROR: activity.pseudoTerminal IS NULL");
             }
             terminalFileDescriptorWrapped = trackedActivity.pseudoTerminalMaster.getFileDescriptor();
             mShellPid = trackedActivityPid;
         } else {
-            Log.w(EmulatorDebug.LOG_TAG, "creating new FileDescriptor");
+            logUtils.log_Info("creating new FileDescriptor");
             terminalFileDescriptorWrapped = wrapFileDescriptor(JNI.createPseudoTerminal(printWelcomeMessage)[0]);
             mShellPid = JNI.getPid();
         }
         if (terminalFileDescriptorWrapped == null) throw new NullPointerException();
         JNI.puts("created log");
-        Log.w(EmulatorDebug.LOG_TAG, "created log");
+        logUtils.log_Info("created log");
 
         new Thread("TermSessionInputReader (stdout/stderr) [log (pid=" + mShellPid + ")]") {
             @Override
@@ -294,13 +294,13 @@ public final class TerminalSession extends TerminalOutput {
                     while (true) {
                         int read = termIn.read(buffer);
                         if (read == -1) {
-                            Log.wtf(EmulatorDebug.LOG_TAG, "stdout/stderr reader return -1");
+                            logUtils.log_Error("stdout/stderr reader return -1");
                             return;
                         }
                         logFile.write(buffer, 0, read);
                         logFileFileDescriptor.sync();
                         if (!mProcessToTerminalIOQueue.write(buffer, 0, read)) {
-                            Log.wtf(EmulatorDebug.LOG_TAG, "stdout/stderr reader [write] returned false (closed)");
+                            logUtils.log_Error("stdout/stderr reader [write] returned false (closed)");
                             return;
                         }
                         mMainThreadHandler.sendEmptyMessage(MSG_NEW_INPUT);
@@ -313,14 +313,14 @@ public final class TerminalSession extends TerminalOutput {
     }
 
     public void createLogcatSession(int columns, int rows, Context context) {
-        Log.w(EmulatorDebug.LOG_TAG, "creating Logcat");
+        logUtils.log_Info("creating Logcat");
         logUtils.errorAndThrowIfNull(mArgs);
         logUtils.errorAndThrowIfNull(mEnv);
         int[] processId = new int[1];
         mTerminalFileDescriptor = JNI.createSubprocess(mShellPath, mCwd, mArgs, mEnv, processId, rows, columns);
         mShellPid = processId[0];
         JNI.puts("created Logcat");
-        Log.w(EmulatorDebug.LOG_TAG, "created Logcat");
+        logUtils.log_Info("created Logcat");
 
         final FileDescriptor terminalFileDescriptorWrapped = wrapFileDescriptor(mTerminalFileDescriptor);
         if (terminalFileDescriptorWrapped == null) throw new NullPointerException();
@@ -339,13 +339,13 @@ public final class TerminalSession extends TerminalOutput {
                     while (true) {
                         int read = termIn.read(buffer);
                         if (read == -1) {
-                            Log.wtf(EmulatorDebug.LOG_TAG, "stdout/stderr reader return -1");
+                            logUtils.log_Error("stdout/stderr reader return -1");
                             return;
                         }
                         logFile.write(buffer, 0, read);
                         logFileFileDescriptor.sync();
                         if (!mProcessToTerminalIOQueue.write(buffer, 0, read)) {
-                            Log.wtf(EmulatorDebug.LOG_TAG, "stdout/stderr reader [write] returned false (closed)");
+                            logUtils.log_Error("stdout/stderr reader [write] returned false (closed)");
                             return;
                         }
                         mMainThreadHandler.sendEmptyMessage(MSG_NEW_INPUT);
@@ -409,7 +409,7 @@ public final class TerminalSession extends TerminalOutput {
         {
             String fmt = "emulator initialized";
             JNI.puts(fmt);
-            Log.w(EmulatorDebug.LOG_TAG, fmt);
+            logUtils.log_Info(fmt);
         }
     }
 
@@ -478,7 +478,7 @@ public final class TerminalSession extends TerminalOutput {
                 try {
                     Os.kill(mShellPid, OsConstants.SIGKILL);
                 } catch (ErrnoException e) {
-                    Log.w(EmulatorDebug.LOG_TAG, "failed sending SIGKILL: " + e.getMessage());
+                    logUtils.log_Error("failed sending SIGKILL: " + e.getMessage());
                 }
             }
         }

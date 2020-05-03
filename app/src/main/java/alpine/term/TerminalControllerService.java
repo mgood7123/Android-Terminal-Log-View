@@ -48,6 +48,8 @@ import static android.content.Context.ACTIVITY_SERVICE;
 
 public class TerminalControllerService implements ServiceConnection {
 
+    LogUtils logUtils = new LogUtils("Terminal Controller Service");
+
     TerminalController terminalController = null;
 
     /**
@@ -65,7 +67,7 @@ public class TerminalControllerService implements ServiceConnection {
     final Object waitOnMe = new Object();
 
     public void waitForReply() {
-        Log.e(Config.APP_LOG_TAG, "CLIENT: waiting for reply");
+        logUtils.log_Error("waiting for reply");
         synchronized (waitOnMe) {
             try {
                 waitOnMe.wait();
@@ -73,7 +75,7 @@ public class TerminalControllerService implements ServiceConnection {
                 // we should have gotten our answer now.
             }
         }
-        Log.e(Config.APP_LOG_TAG, "CLIENT: replied");
+        logUtils.log_Error("replied");
     }
 
     HandlerThread ht = new HandlerThread("threadName");
@@ -84,20 +86,20 @@ public class TerminalControllerService implements ServiceConnection {
         @SuppressWarnings("DuplicateBranchesInSwitch")
         @Override
         public boolean handleMessage(Message msg) {
-            Log.e(Config.APP_LOG_TAG, "CLIENT: received message");
+            logUtils.log_Error("received message");
             switch (msg.what) {
                 case TerminalService.MSG_NO_REPLY:
                     break;
                 case TerminalService.MSG_REGISTERED_CLIENT:
-                    Log.e(Config.APP_LOG_TAG, "CLIENT: registered");
+                    logUtils.log_Error("registered");
                     sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
                     break;
                 case TerminalService.MSG_UNREGISTERED_CLIENT:
-                    Log.e(Config.APP_LOG_TAG, "CLIENT: unregistered");
+                    logUtils.log_Error("unregistered");
                     sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
                     break;
                 case TerminalService.MSG_IS_SERVER_ALIVE:
-                    Log.e(Config.APP_LOG_TAG, "CLIENT: SERVER IS ALIVE");
+                    logUtils.log_Info("SERVER IS ALIVE");
                     sendMessageToServerNonBlocking(TerminalService.MSG_CALLBACK_INVOKED);
                     break;
                 case TerminalService.MSG_REGISTER_ACTIVITY_FAILED:
@@ -234,32 +236,32 @@ public class TerminalControllerService implements ServiceConnection {
 
     @Override
     public void onServiceConnected(ComponentName componentName, IBinder boundService) {
-        Log.e(Config.APP_LOG_TAG, "onServiceConnected() has been called");
+        logUtils.logMethodName_Info();
         if (boundService instanceof TerminalService.LocalBinder) {
             TerminalService.LocalBinder b = (TerminalService.LocalBinder) boundService;
             terminalController.mTermService = b.service;
             context = b.service.getApplicationContext();
             terminalController.mTermService.terminalControllerService = this;
-            Log.e(Config.APP_LOG_TAG, "CLIENT: BINDED TO LOCAL SERVICE");
+            logUtils.log_Info("binded to local service");
             isLocalService = true;
         } else {
             mService = new Messenger(boundService);
-            Log.e(Config.APP_LOG_TAG, "CLIENT: BINDED TO REMOTE SERVICE");
+            logUtils.log_Info("binded to remote service");
             if (ht.getState() == Thread.State.NEW) {
                 ht.start();
                 looper = ht.getLooper();
                 handler = new Handler(looper, callback);
                 mMessenger = new Messenger(handler);
-                Log.e(Config.APP_LOG_TAG, "CLIENT: STARTED MESSENGER");
+                logUtils.log_Info("started messenger");
             }
 
             // We want to monitor the service for as long as we are
             // connected to it.
-            Log.e(Config.APP_LOG_TAG, "CLIENT: registering");
+            logUtils.log_Info("registering");
             sendMessageToServer(TerminalService.MSG_REGISTER_CLIENT);
             if (terminalController != null) {
                 if (terminalController.activity == null) {
-                    Log.e(Config.APP_LOG_TAG, "ERROR: ACTIVITY HAS NOT BEEN STARTED");
+                    logUtils.log_Error("activity has not been started");
                     return;
                 }
             }
@@ -473,7 +475,7 @@ public class TerminalControllerService implements ServiceConnection {
 
     public TerminalSession createLog(TrackedActivity trackedActivity, boolean printWelcomeMessage, Context context) {
         if (terminalController.mTermService == null) {
-            Log.e(Config.APP_LOG_TAG, "error: terminalController.mTermService is null");
+            logUtils.log_Error("error: terminalController.mTermService is null");
             return null;
         }
         TerminalSession session;
@@ -511,7 +513,7 @@ public class TerminalControllerService implements ServiceConnection {
 
     public TerminalSession createLogcat(TrackedActivity trackedActivity, boolean useRoot, Context context) {
         if (terminalController.mTermService == null) {
-            Log.e(Config.APP_LOG_TAG, "error: terminalController.mTermService is null");
+            logUtils.log_Error("error: terminalController.mTermService is null");
             return null;
         }
 
@@ -548,7 +550,7 @@ public class TerminalControllerService implements ServiceConnection {
 
     public TerminalSession createShell(TrackedActivity trackedActivity, Context context) {
         if (terminalController.mTermService == null) {
-            Log.e(Config.APP_LOG_TAG, "error: terminalController.mTermService is null");
+            logUtils.log_Error("error: terminalController.mTermService is null");
             return null;
         }
 
@@ -606,9 +608,9 @@ public class TerminalControllerService implements ServiceConnection {
         runWhenConnectedToService(new Runnable() {
             @Override
             public void run() {
-                Log.e(Config.APP_LOG_TAG, "REGISTERING ACTIVITY");
+                logUtils.log_Error("REGISTERING ACTIVITY");
                 registerActivity_(activity, pseudoTerminal);
-                Log.e(Config.APP_LOG_TAG, "REGISTERED ACTIVITY");
+                logUtils.log_Error("REGISTERED ACTIVITY");
             }
         });
     }

@@ -25,6 +25,8 @@ package alpine.term.emulator;
 import java.util.HashMap;
 import java.util.Map;
 
+import alpine.term.LogUtils;
+
 import static android.view.KeyEvent.KEYCODE_BACK;
 import static android.view.KeyEvent.KEYCODE_BREAK;
 import static android.view.KeyEvent.KEYCODE_DEL;
@@ -77,6 +79,8 @@ import static android.view.KeyEvent.KEYCODE_SYSRQ;
 import static android.view.KeyEvent.KEYCODE_TAB;
 
 public final class KeyHandler {
+
+    LogUtils logUtils = new LogUtils("Key Handler");
 
     public static final int KEYMOD_ALT = 0x80000000;
     public static final int KEYMOD_CTRL = 0x40000000;

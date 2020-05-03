@@ -35,6 +35,8 @@ import android.widget.RelativeLayout;
  */
 public final class HelpActivity extends Activity {
 
+    LogUtils logUtils = new LogUtils("Help Activity");
+
     private WebView mWebView;
 
     @Override

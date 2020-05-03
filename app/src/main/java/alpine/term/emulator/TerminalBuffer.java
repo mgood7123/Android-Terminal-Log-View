@@ -24,6 +24,8 @@ package alpine.term.emulator;
 
 import java.util.Arrays;
 
+import alpine.term.LogUtils;
+
 /**
  * A circular buffer of {@link TerminalRow}:s which keeps notes about what is visible on a logical screen and the scroll
  * history.
@@ -31,6 +33,8 @@ import java.util.Arrays;
  * See {@link #externalToInternalRow(int)} for how to map from logical screen rows to array indices.
  */
 public final class TerminalBuffer {
+
+    LogUtils logUtils = new LogUtils("Terminal Buffer");
 
     TerminalRow[] mLines;
     /** The length of {@link #mLines}. */

@@ -44,6 +44,8 @@ import alpine.term.terminal_view.TerminalView;
  */
 public final class ExtraKeysView extends GridLayout {
 
+    LogUtils logUtils = new LogUtils("Extra Keys View");
+
     private static final int TEXT_COLOR = 0xFFFFFFFF;
     private static final int BUTTON_COLOR = 0x00000000;
     private static final int BUTTON_PRESSED_COLOR = 0x7FFFFFFF;
