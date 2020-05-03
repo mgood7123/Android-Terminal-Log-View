@@ -266,9 +266,9 @@ public final class TerminalSession extends TerminalOutput {
         final FileDescriptor terminalFileDescriptorWrapped;
         if (isTrackedActivity) {
             logUtils.log_Info("using existing FileDescriptor");
-            if (trackedActivity.pseudoTerminalMaster == null) {
-                logUtils.log_Info("SERVER: ERROR: activity.pseudoTerminal IS NULL");
-            }
+            logUtils.errorAndThrowIfNull(
+                trackedActivity.pseudoTerminalMaster, "trackedActivity.pseudoTerminalMaster IS NULL"
+            );
             terminalFileDescriptorWrapped = trackedActivity.pseudoTerminalMaster.getFileDescriptor();
             mShellPid = trackedActivityPid;
         } else {

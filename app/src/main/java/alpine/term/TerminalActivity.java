@@ -55,6 +55,8 @@ public final class TerminalActivity extends Activity {
     protected void onCreate(Bundle bundle) {
         super.onCreate(bundle);
 
+        // TODO: refactor
+
         Intent intent = getIntent();
 
         // set log view
