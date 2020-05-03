@@ -62,10 +62,14 @@ public final class InputDispatcher implements TerminalViewClient {
     @Override
     public void onSingleTapUp(MotionEvent e) {
         // do nothing if this is attached to a log view
-        if (terminalController.terminalControllerService.isCurrentSessionShell()) {
-            InputMethodManager mgr = (InputMethodManager) context.getSystemService(Context.INPUT_METHOD_SERVICE);
-            if (mgr != null)
-                mgr.showSoftInput(terminalController.mTerminalView, InputMethodManager.SHOW_IMPLICIT);
+        Boolean isShell = terminalController.terminalControllerService.isCurrentSessionShell();
+        if (isShell != null) {
+            if (isShell) {
+                InputMethodManager mgr = (InputMethodManager) context.getSystemService(Context.INPUT_METHOD_SERVICE);
+                if (mgr != null) {
+                    mgr.showSoftInput(terminalController.mTerminalView, InputMethodManager.SHOW_IMPLICIT);
+                }
+            }
         }
     }
 
@@ -88,7 +92,9 @@ public final class InputDispatcher implements TerminalViewClient {
                 terminalController.switchToSession(false);
             } else if (unicodeChar == 'k'/* keyboard */) {
                 InputMethodManager imm = (InputMethodManager) context.getSystemService(Context.INPUT_METHOD_SERVICE);
-                if (imm != null) imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0);
+                if (imm != null) {
+                    imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0);
+                }
             } else if (unicodeChar == 'm'/* menu */) {
                 terminalController.mTerminalView.showContextMenu();
             } else if (unicodeChar == 'u' /* urls */) {
@@ -246,15 +252,26 @@ public final class InputDispatcher implements TerminalViewClient {
     private boolean handleVirtualKeys(int keyCode, KeyEvent event, boolean down) {
         InputDevice inputDevice = event.getDevice();
 
+        Boolean isShell = terminalController.terminalControllerService.isCurrentSessionShell();
         if (inputDevice != null && inputDevice.getKeyboardType() == InputDevice.KEYBOARD_TYPE_ALPHABETIC) {
             // Do not steal dedicated buttons from a full external keyboard.
             return false;
-        } else if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN && terminalController.terminalControllerService.isCurrentSessionShell()) {
-            mVirtualControlKeyDown = down;
-            return true;
-        } else if (keyCode == KeyEvent.KEYCODE_VOLUME_UP && terminalController.terminalControllerService.isCurrentSessionShell()) {
-            mVirtualFnKeyDown = down;
-            return true;
+        } else if (keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) {
+            if (isShell != null) {
+                if (isShell) {
+                    mVirtualControlKeyDown = down;
+                    return true;
+                }
+            }
+            return false;
+        } else if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
+            if (isShell != null) {
+                if (isShell) {
+                    mVirtualFnKeyDown = down;
+                    return true;
+                }
+            }
+            return false;
         }
 
         return false;

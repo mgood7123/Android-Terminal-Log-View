@@ -167,7 +167,7 @@ public final class TerminalSession extends TerminalOutput {
     private final TrackedActivity trackedActivity;
     private final boolean printWelcomeMessage;
 
-    public TerminalSession(boolean isLogView, String shellPath, String[] args, String[] env, String cwd, SessionChangedCallback changeCallback, TrackedActivity trackedActivity, boolean printWelcomeMessage) {
+    public TerminalSession(boolean isLogView, String shellPath, String[] args, String[] env, String cwd, SessionChangedCallback changeCallback, TrackedActivity trackedActivity, boolean printWelcomeMessage, Context context) {
         mChangeCallback = changeCallback;
 
         this.trackedActivity = trackedActivity;
@@ -184,6 +184,7 @@ public final class TerminalSession extends TerminalOutput {
         this.mEnv = env;
         this.mCwd = cwd;
         this.printWelcomeMessage = printWelcomeMessage;
+        updateSize(80,80, context);
     }
 
     /** Inform the attached pty of the new size and reflow or initialize the emulator. */
@@ -219,6 +220,8 @@ public final class TerminalSession extends TerminalOutput {
     
     public void createShellSession(int columns, int rows) {
         Log.w(EmulatorDebug.LOG_TAG, "creating shell");
+        logUtils.errorAndThrowIfNull(mArgs);
+        logUtils.errorAndThrowIfNull(mEnv);
         int[] processId = new int[1];
         mTerminalFileDescriptor = JNI.createSubprocess(mShellPath, mCwd, mArgs, mEnv, processId, rows, columns);
         mShellPid = processId[0];
@@ -310,8 +313,9 @@ public final class TerminalSession extends TerminalOutput {
     }
 
     public void createLogcatSession(int columns, int rows, Context context) {
-        mEmulator.resize(80, 80);
         Log.w(EmulatorDebug.LOG_TAG, "creating Logcat");
+        logUtils.errorAndThrowIfNull(mArgs);
+        logUtils.errorAndThrowIfNull(mEnv);
         int[] processId = new int[1];
         mTerminalFileDescriptor = JNI.createSubprocess(mShellPath, mCwd, mArgs, mEnv, processId, rows, columns);
         mShellPid = processId[0];
@@ -363,6 +367,7 @@ public final class TerminalSession extends TerminalOutput {
      */
     public void initializeEmulator(int columns, int rows, Context context) {
         mEmulator = new TerminalEmulator(this, columns, rows, /* transcript= */5000);
+        mEmulator.currentFontSize = 24;
 
         if (isLogView) {
             // should this be true for a shell as well?

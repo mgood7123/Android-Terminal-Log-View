@@ -230,12 +230,15 @@ public class TerminalControllerService implements ServiceConnection {
 
     boolean isLocalService = false;
 
+    Context context = null;
+
     @Override
     public void onServiceConnected(ComponentName componentName, IBinder boundService) {
         Log.e(Config.APP_LOG_TAG, "onServiceConnected() has been called");
         if (boundService instanceof TerminalService.LocalBinder) {
             TerminalService.LocalBinder b = (TerminalService.LocalBinder) boundService;
             terminalController.mTermService = b.service;
+            context = b.service.getApplicationContext();
             terminalController.mTermService.terminalControllerService = this;
             Log.e(Config.APP_LOG_TAG, "CLIENT: BINDED TO LOCAL SERVICE");
             isLocalService = true;
@@ -265,6 +268,7 @@ public class TerminalControllerService implements ServiceConnection {
             action.run();
         }
         runnableArrayList.clear();
+        // if this is a remote service, then return
         if (!isLocalService) return;
 
         terminalController.mTermService.mSessionChangeCallback = new TerminalSession.SessionChangedCallback() {
@@ -300,10 +304,7 @@ public class TerminalControllerService implements ServiceConnection {
 
             @Override
             public void onSessionFinished(final TerminalSession finishedSession) {
-                // Needed for resetting font size on next application launch
-                // otherwise it will be reset only after force-closing.
                 if (terminalController.mTermService.getSessions().isEmpty()) {
-                    terminalController.currentFontSize = -1;
                     if (terminalController.mTermService.mWantsToStop) {
                         // The service wants to stop as soon as possible.
                         terminalController.activity.finish();
@@ -436,13 +437,13 @@ public class TerminalControllerService implements ServiceConnection {
 
         if (terminalController.mTermService.getSessions().isEmpty()) {
             if (terminalController.mIsVisible) {
-                TerminalSession log = createLog(true);
-                createLogcat();
+                TerminalSession log = createLog(true, context);
+                createLogcat(context);
                 terminalController.switchToSession(log);
                 // create a log and logcat for each registered activity
                 for (TrackedActivity trackedActivity : terminalController.mTermService.mTrackedActivities) {
-                    log = createLog(trackedActivity, false);
-                    createLogcat(trackedActivity);
+                    log = createLog(trackedActivity, false, context);
+                    createLogcat(trackedActivity, context);
                     terminalController.switchToSession(log);
                 }
             } else {
@@ -466,11 +467,11 @@ public class TerminalControllerService implements ServiceConnection {
                 ? null : terminalController.mTerminalView.getCurrentSession();
     }
 
-    public TerminalSession createLog(boolean printWelcomeMessage) {
-        return createLog(null, printWelcomeMessage);
+    public TerminalSession createLog(boolean printWelcomeMessage, Context context) {
+        return createLog(null, printWelcomeMessage, context);
     }
 
-    public TerminalSession createLog(TrackedActivity trackedActivity, boolean printWelcomeMessage) {
+    public TerminalSession createLog(TrackedActivity trackedActivity, boolean printWelcomeMessage, Context context) {
         if (terminalController.mTermService == null) {
             Log.e(Config.APP_LOG_TAG, "error: terminalController.mTermService is null");
             return null;
@@ -478,7 +479,7 @@ public class TerminalControllerService implements ServiceConnection {
         TerminalSession session;
         TerminalSession currentSession = terminalController.mTerminalView.getCurrentSession();
 
-        session = terminalController.mTermService.createShellSession(true, trackedActivity, printWelcomeMessage);
+        session = terminalController.mTermService.createShellSession(true, trackedActivity, printWelcomeMessage, context);
         terminalController.mTerminalView.attachSession(session);
 
         int logPid;
@@ -500,15 +501,15 @@ public class TerminalControllerService implements ServiceConnection {
         return session;
     }
 
-    private TerminalSession createLogcat() {
-        return createLogcat(null, false);
+    private TerminalSession createLogcat(Context context) {
+        return createLogcat(null, false, context);
     }
 
-    public TerminalSession createLogcat(TrackedActivity trackedActivity) {
-        return createLogcat(null, false);
+    public TerminalSession createLogcat(TrackedActivity trackedActivity, Context context) {
+        return createLogcat(null, false, context);
     }
 
-    public TerminalSession createLogcat(TrackedActivity trackedActivity, boolean useRoot) {
+    public TerminalSession createLogcat(TrackedActivity trackedActivity, boolean useRoot, Context context) {
         if (terminalController.mTermService == null) {
             Log.e(Config.APP_LOG_TAG, "error: terminalController.mTermService is null");
             return null;
@@ -517,7 +518,7 @@ public class TerminalControllerService implements ServiceConnection {
         TerminalSession session;
         TerminalSession currentSession = terminalController.mTerminalView.getCurrentSession();
 
-        session = terminalController.mTermService.createLogcatSession(trackedActivity, useRoot);
+        session = terminalController.mTermService.createLogcatSession(trackedActivity, useRoot, context);
         terminalController.mTerminalView.attachSession(session);
 
         int logPid;
@@ -541,11 +542,11 @@ public class TerminalControllerService implements ServiceConnection {
         return session;
     }
 
-    public TerminalSession createShell() {
-        return createShell(null);
+    public TerminalSession createShell(Context context) {
+        return createShell(null, context);
     }
 
-    public TerminalSession createShell(TrackedActivity trackedActivity) {
+    public TerminalSession createShell(TrackedActivity trackedActivity, Context context) {
         if (terminalController.mTermService == null) {
             Log.e(Config.APP_LOG_TAG, "error: terminalController.mTermService is null");
             return null;
@@ -554,7 +555,7 @@ public class TerminalControllerService implements ServiceConnection {
         TerminalSession session;
         TerminalSession currentSession = terminalController.mTerminalView.getCurrentSession();
 
-        session = terminalController.mTermService.createShellSession(false, trackedActivity, false);
+        session = terminalController.mTermService.createShellSession(false, trackedActivity, false, context);
         terminalController.mTerminalView.attachSession(session);
 
         int shellPid;

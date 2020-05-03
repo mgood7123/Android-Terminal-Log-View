@@ -74,39 +74,34 @@ public class TerminalController {
     TerminalControllerService terminalControllerService;
 
 
-    final int MAX_FONTSIZE = 256;
-    int MIN_FONTSIZE;
-    int currentFontSize = -1;
+    final int DEFAULT_MAX_FONTSIZE = 256;
+    int DEFAULT_MIN_FONTSIZE;
+    int DEFAULT_FONT_SIZE = 24;
+
     DrawerLayout drawerLayout;
     ViewPager viewPager;
     ListView leftDrawerList;
     RelativeLayout terminalContainer;
     RelativeLayout mainView;
 
-    public void onCreate(TerminalActivity terminalActivity, TerminalView viewById) {
-        inflater = LayoutInflater.from(terminalActivity);
-        activity = terminalActivity;
-        assetManager = terminalActivity.getAssets();
+    public void onCreate(Activity activity, TerminalView viewById) {
+        inflater = LayoutInflater.from(activity);
+        this.activity = activity;
+        assetManager = activity.getAssets();
         mTerminalView = viewById;
+        mTerminalView.activity = activity;
 
-        viewPager = terminalActivity.findViewById(R.id.viewpager);
-        terminalContainer = terminalActivity.findViewById(R.id.terminal_container);
-        mainView = terminalActivity.findViewById(R.id.mainView);
+        viewPager = activity.findViewById(R.id.viewpager);
+        terminalContainer = activity.findViewById(R.id.terminal_container);
+        mainView = activity.findViewById(R.id.mainView);
         drawerLayout = getDrawer();
-        leftDrawerList = terminalActivity.findViewById(R.id.left_drawer_list);
-        mTerminalView.setOnKeyListener(new InputDispatcher(terminalActivity, this));
+        leftDrawerList = activity.findViewById(R.id.left_drawer_list);
+        mTerminalView.setOnKeyListener(new InputDispatcher(activity, this));
 
         // is this needed?
-        mSettings = new TerminalPreferences(terminalActivity);
+        mSettings = new TerminalPreferences(activity);
 
-        // set text size
-        if (currentFontSize == -1) currentFontSize = 24;
-
-        // This is a bit arbitrary and sub-optimal. We want to give a sensible default for minimum
-        // font size to prevent invisible text due to zoom by mistake:
-        MIN_FONTSIZE = 12;
-
-        mTerminalView.setTextSize(currentFontSize);
+        mTerminalView.setTextSize(DEFAULT_FONT_SIZE);
 
         // reload terminal style
         reloadTerminalStyling();
@@ -180,33 +175,35 @@ public class TerminalController {
             }
         });
 
-        terminalActivity.findViewById(R.id.toggle_keyboard_button).setOnClickListener(v -> {
-            InputMethodManager imm = (InputMethodManager) terminalActivity.getSystemService(Context.INPUT_METHOD_SERVICE);
-            if (imm != null) imm.toggleSoftInput(InputMethodManager.SHOW_IMPLICIT, 0);
+        activity.findViewById(R.id.toggle_keyboard_button).setOnClickListener(v -> {
+            InputMethodManager imm = (InputMethodManager) activity.getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (imm != null) {
+                imm.toggleSoftInput(InputMethodManager.SHOW_IMPLICIT, 0);
+            }
         });
-        terminalActivity.findViewById(R.id.toggle_keyboard_button).setOnLongClickListener(v -> {
+        activity.findViewById(R.id.toggle_keyboard_button).setOnLongClickListener(v -> {
             if (terminalControllerService.getCurrentSession().isShell()) toggleShowExtraKeys();
             return true;
         });
 
-        terminalActivity.registerForContextMenu(mTerminalView);
+        activity.registerForContextMenu(mTerminalView);
 
         terminalControllerService = new TerminalControllerService();
         terminalControllerService.terminalController = this;
 
-        Intent serviceIntent = new Intent(terminalActivity, TerminalService.class);
+        Intent serviceIntent = new Intent(activity, TerminalService.class);
         serviceIntent.putExtra("BINDING_TYPE", "BINDING_LOCAL");
         // Start the service and make it run regardless of who is bound to it:
-        terminalActivity.startService(serviceIntent);
-        if (!terminalActivity.bindService(serviceIntent, terminalControllerService, 0)) {
+        activity.startService(serviceIntent);
+        if (!activity.bindService(serviceIntent, terminalControllerService, 0)) {
             throw new RuntimeException("bindService() failed");
         }
 
-        Button create_shell = terminalActivity.findViewById(R.id.create_new_shell);
+        Button create_shell = activity.findViewById(R.id.create_new_shell);
         create_shell.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                terminalControllerService.createShell();
+                terminalControllerService.createShell(activity.getApplicationContext());
             }
         });
     }
@@ -535,9 +532,9 @@ public class TerminalController {
      * Change terminal font size.
      */
     public void changeFontSize(boolean increase) {
-        currentFontSize += (increase ? 1 : -1) * 2;
-        currentFontSize = Math.max(MIN_FONTSIZE, Math.min(currentFontSize, MAX_FONTSIZE));
-        mTerminalView.setTextSize(currentFontSize);
+        mTerminalView.mEmulator.currentFontSize += (increase ? 1 : -1) * 2;
+        mTerminalView.mEmulator.currentFontSize = Math.max(mTerminalView.mEmulator.MIN_FONTSIZE, Math.min(mTerminalView.mEmulator.currentFontSize, mTerminalView.mEmulator.MAX_FONTSIZE));
+        mTerminalView.setTextSize(mTerminalView.mEmulator.currentFontSize);
     }
 
     /**

@@ -31,6 +31,8 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Stack;
 
+import alpine.term.LogUtils;
+
 /**
  * Renders text into a screen. Contains all the terminal-specific knowledge and state. Emulates a subset of the X Window
  * System xterm terminal, which in turn is an emulator for a subset of the Digital Equipment Corporation vt100 terminal.
@@ -52,6 +54,10 @@ import java.util.Stack;
 public final class TerminalEmulator {
 
     public boolean isLogView;
+
+    public final int MAX_FONTSIZE = 256;
+    public int MIN_FONTSIZE;
+    public int currentFontSize = -1;
 
     /** Log unknown or unimplemented escape sequences received from the shell process. */
     private static final boolean LOG_ESCAPE_SEQUENCES = false;
@@ -344,6 +350,8 @@ public final class TerminalEmulator {
             }
         }
     }
+
+    LogUtils logUtils = new LogUtils("Terminal Emulator");
 
     public void resize(int columns, int rows) {
         if (mRows == rows && mColumns == columns) {

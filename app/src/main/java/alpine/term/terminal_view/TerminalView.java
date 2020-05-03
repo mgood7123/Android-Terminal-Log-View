@@ -22,6 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 package alpine.term.terminal_view;
 
+import android.app.Activity;
 import android.annotation.SuppressLint;
 import android.content.ClipData;
 import android.content.ClipboardManager;
@@ -58,6 +59,7 @@ import android.widget.PopupWindow;
 import android.widget.Scroller;
 
 import alpine.term.Config;
+import alpine.term.LogUtils;
 import alpine.term.R;
 import alpine.term.emulator.KeyHandler;
 import alpine.term.emulator.TerminalBuffer;
@@ -75,11 +77,13 @@ public final class TerminalView extends View {
     private TerminalSession mTermSession = null;
 
     /** Our terminal emulator whose session is {@link #mTermSession}. */
-    private TerminalEmulator mEmulator;
+    public TerminalEmulator mEmulator;
 
     private TerminalRenderer mRenderer;
 
     private TerminalViewClient mClient = null;
+
+    public Activity activity = null;
 
     /** The top row of text to display. Ranges from -activeTranscriptRows to 0. */
     private int mTopRow;
@@ -250,27 +254,6 @@ public final class TerminalView extends View {
         this.mClient = onKeyListener;
     }
 
-    /**
-     * Attach a {@link TerminalSession} to this view.
-     *
-     * @param session The {@link TerminalSession} this view will be displaying.
-     */
-    public boolean attachSession(TerminalSession session) {
-        if (session == mTermSession) return false;
-        mTopRow = 0;
-
-        mTermSession = session;
-        mEmulator = null;
-        mCombiningAccent = 0;
-
-        updateSize();
-
-        // Wait with enabling the scrollbar until we have a terminal to get scroll position from.
-        setVerticalScrollBarEnabled(true);
-
-        return true;
-    }
-
     @Override
     public InputConnection onCreateInputConnection(EditorInfo outAttrs) {
         // Previous keyboard issues:
@@ -427,7 +410,40 @@ public final class TerminalView extends View {
 
         mEmulator.clearScrollCounter();
         invalidate();
-        if (mAccessibilityEnabled) setContentDescription(getText());
+        if (mAccessibilityEnabled) {
+            activity.runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    setContentDescription(getText());
+                }
+            });
+        }
+    }
+
+    LogUtils logUtils = new LogUtils("TerminalView");
+
+    /**
+     * Attach a {@link TerminalSession} to this view.
+     *
+     * @param session The {@link TerminalSession} this view will be displaying.
+     */
+    public boolean attachSession(TerminalSession session) {
+        if (session == mTermSession) return false;
+        logUtils.errorAndThrowIfNull(session);
+        mTopRow = 0;
+        mTermSession = session;
+        mEmulator = mTermSession.getEmulator();
+        logUtils.errorAndThrowIfNull(mEmulator);
+        mCombiningAccent = 0;
+
+        mRenderer = new TerminalRenderer(mEmulator.currentFontSize, mRenderer == null ? Typeface.MONOSPACE : mRenderer.mTypeface);
+        updateSize();
+        onScreenUpdated();
+
+        // Wait with enabling the scrollbar until we have a terminal to get scroll position from.
+        setVerticalScrollBarEnabled(true);
+
+        return true;
     }
 
     /**
@@ -436,14 +452,44 @@ public final class TerminalView extends View {
      * @param textSize the new font size, in density-independent pixels.
      */
     public void setTextSize(int textSize) {
-        mRenderer = new TerminalRenderer(textSize, mRenderer == null ? Typeface.MONOSPACE : mRenderer.mTypeface);
-        updateSize();
+        if (mEmulator != null) {
+            mEmulator.currentFontSize = textSize;
+            mRenderer = new TerminalRenderer(mEmulator.currentFontSize, mRenderer == null ? Typeface.MONOSPACE : mRenderer.mTypeface);
+            updateSize();
+        }
     }
 
     public void setTypeface(Typeface newTypeface) {
         mRenderer = new TerminalRenderer(mRenderer.mTextSize, newTypeface);
         updateSize();
         invalidate();
+    }
+
+    /**
+     * This is called during layout when the size of this view has changed. If you were just added to the view
+     * hierarchy, you're called with the old values of 0.
+     */
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        updateSize();
+    }
+
+    /** Check if the terminal size in rows and columns should be updated. */
+    private void updateSize() {
+        int viewWidth = getWidth();
+        int viewHeight = getHeight();
+        if (viewWidth == 0 || viewHeight == 0 || mTermSession == null) return;
+
+        // Set to 80 and 24 if you want to enable vttest.
+        int newColumns = Math.max(4, (int) (viewWidth / mRenderer.mFontWidth));
+        int newRows = Math.max(4, (viewHeight - mRenderer.mFontLineSpacingAndAscent) / mRenderer.mFontLineSpacing);
+
+        if (newColumns != mEmulator.mColumns || newRows != mEmulator.mRows) {
+            mTermSession.updateSize(newColumns, newRows, getContext());
+            mTopRow = 0;
+            scrollTo(0, 0);
+            invalidate();
+        }
     }
 
     @Override
@@ -730,35 +776,6 @@ public final class TerminalView extends View {
         }
 
         return true;
-    }
-
-    /**
-     * This is called during layout when the size of this view has changed. If you were just added to the view
-     * hierarchy, you're called with the old values of 0.
-     */
-    @Override
-    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
-        updateSize();
-    }
-
-    /** Check if the terminal size in rows and columns should be updated. */
-    private void updateSize() {
-        int viewWidth = getWidth();
-        int viewHeight = getHeight();
-        if (viewWidth == 0 || viewHeight == 0 || mTermSession == null) return;
-
-        // Set to 80 and 24 if you want to enable vttest.
-        int newColumns = Math.max(4, (int) (viewWidth / mRenderer.mFontWidth));
-        int newRows = Math.max(4, (viewHeight - mRenderer.mFontLineSpacingAndAscent) / mRenderer.mFontLineSpacing);
-
-        if (mEmulator == null || (newColumns != mEmulator.mColumns || newRows != mEmulator.mRows)) {
-            mTermSession.updateSize(newColumns, newRows, getContext());
-            mEmulator = mTermSession.getEmulator();
-
-            mTopRow = 0;
-            scrollTo(0, 0);
-            invalidate();
-        }
     }
 
     @Override
