@@ -16,6 +16,8 @@ import android.os.Message;
 import android.os.Messenger;
 import android.os.RemoteException;
 
+import com.example.libclient_service.LibService_Messenger;
+
 import java.util.ArrayList;
 
 public class TerminalClientAPI implements ServiceConnection {
@@ -61,190 +63,41 @@ public class TerminalClientAPI implements ServiceConnection {
     /** Flag indicating whether we have called bind on the service. */
     public boolean mIsBound;
 
-    // available for all threads somehow
-    final Object waitOnMe = new Object();
-
-    public void waitForReply() {
-        logUtils.log_Info("CLIENT: waiting for reply");
-        synchronized (waitOnMe) {
-            try {
-                waitOnMe.wait();
-            } catch (InterruptedException e) {
-                // we should have gotten our answer now.
-            }
-        }
-        logUtils.log_Info("CLIENT: replied");
-    }
-
-    HandlerThread ht = new HandlerThread("Terminal Client");
-    Looper looper;
-    Handler handler;
-    Handler.Callback callback = new Handler.Callback() {
-
-        @SuppressWarnings("DuplicateBranchesInSwitch")
-        @Override
-        public boolean handleMessage(Message msg) {
-            logUtils.log_Info("CLIENT: received message");
-            switch (msg.what) {
-                case MSG_NO_REPLY:
-                    break;
-                case MSG_REGISTERED_CLIENT:
-                    logUtils.log_Info("CLIENT: registered");
-                    sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
-                    break;
-                case MSG_UNREGISTERED_CLIENT:
-                    logUtils.log_Info("CLIENT: unregistered");
-                    sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
-                    break;
-                case MSG_IS_SERVER_ALIVE:
-                    logUtils.log_Info("CLIENT: SERVER IS ALIVE");
-                    sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
-                    break;
-                case MSG_REGISTER_ACTIVITY_FAILED:
-                    sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
-                    break;
-                case MSG_REGISTERED_ACTIVITY:
-                    sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
-                    break;
-                case MSG_STARTED_TERMINAL_ACTIVITY:
-                    break;
-                default:
-                    sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
-                    break;
-            }
-            // handled messages are handled in background thread
-            // then notify about finished message.
-            synchronized (waitOnMe) {
-                waitOnMe.notifyAll();
-            }
-            return true;
-        }
-    };
-
-    public boolean sendMessageToServer(int what) {
-        return sendMessageToServer(null, what, 0, 0, null, null);
-    }
-
-    private boolean sendMessageToServer(int what, int arg1) {
-        return sendMessageToServer(null, what, arg1, 0, null, null);
-    }
-
-    private boolean sendMessageToServer(int what, int arg1, int arg2) {
-        return sendMessageToServer(null, what, arg1, arg2, null, null);
-    }
-
-    public boolean sendMessageToServer(int what, Object obj) {
-        return sendMessageToServer(null, what, 0, 0, obj, null);
-    }
-
-    private boolean sendMessageToServer(int what, int arg1, Object obj) {
-        return sendMessageToServer(null, what, arg1, 0, obj, null);
-    }
-
-    private boolean sendMessageToServer(int what, int arg1, int arg2, Object obj) {
-        return sendMessageToServer(null, what, arg1, arg2, obj, null);
-    }
-
-    public boolean sendMessageToServer(int what, Bundle bundle) {
-        return sendMessageToServer(null, what, 0, 0, null, bundle);
-    }
-
-    private boolean sendMessageToServer(int what, int arg1, Bundle bundle) {
-        return sendMessageToServer(null, what, arg1, 0, null, bundle);
-    }
-
-    private boolean sendMessageToServer(int what, int arg1, int arg2, Bundle bundle) {
-        return sendMessageToServer(null, what, arg1, arg2, null, bundle);
-    }
-
-    public boolean sendMessageToServer(int what, Object obj, Bundle bundle) {
-        return sendMessageToServer(null, what, 0, 0, obj, bundle);
-    }
-
-    private boolean sendMessageToServer(int what, int arg1, Object obj, Bundle bundle) {
-        return sendMessageToServer(null, what, arg1, 0, obj, bundle);
-    }
-
-    private boolean sendMessageToServer(int what, int arg1, int arg2, Object obj, Bundle bundle) {
-        return sendMessageToServer(null, what, arg1, arg2, obj, bundle);
-    }
-
-    public boolean sendMessageToServer(Handler handler, int what, int arg1, int arg2, Object obj, Bundle bundle) {
-        try {
-            Message msg = Message.obtain(handler, what, arg1, arg2, obj);
-            if (bundle != null) msg.setData(bundle);
-            msg.replyTo = mMessenger;
-            mService.send(msg);
-            waitForReply();
-            return true;
-        } catch (RemoteException e) {
-            // In this case the service has crashed before we could even
-            // do anything with it
-            return false;
-        }
-    }
-
-    public boolean sendMessageToServerNonBlocking(int what) {
-        return sendMessageToServerNonBlocking(null, what, 0, 0, null);
-    }
-
-    private boolean sendMessageToServerNonBlocking(int what, int arg1) {
-        return sendMessageToServerNonBlocking(null, what, arg1, 0, null);
-    }
-
-    private boolean sendMessageToServerNonBlocking(int what, int arg1, int arg2) {
-        return sendMessageToServerNonBlocking(null, what, arg1, arg2, null);
-    }
-
-    public boolean sendMessageToServerNonBlocking(int what, Object obj) {
-        return sendMessageToServerNonBlocking(null, what, 0, 0, obj);
-    }
-
-    private boolean sendMessageToServerNonBlocking(int what, int arg1, Object obj) {
-        return sendMessageToServerNonBlocking(null, what, arg1, 0, obj);
-    }
-
-    private boolean sendMessageToServerNonBlocking(int what, int arg1, int arg2, Object obj) {
-        return sendMessageToServerNonBlocking(null, what, arg1, arg2, obj);
-    }
-
-    public boolean sendMessageToServerNonBlocking(Handler handler, int what, int arg1, int arg2, Object obj) {
-        try {
-            Message msg = Message.obtain(handler, what, arg1, arg2, obj);
-            msg.replyTo = mMessenger;
-            mService.send(msg);
-            return true;
-        } catch (RemoteException e) {
-            // In this case the service has crashed before we could even
-            // do anything with it
-            return false;
-        }
-    }
-
-    /**
-     * Target we publish for clients to send messages to IncomingHandler.
-     */
-    Messenger mMessenger;
-
     private ArrayList<Runnable> runnableArrayList = new ArrayList<>();
+
+    LibService_Messenger libService_messenger = new LibService_Messenger();
 
     @Override
     public void onServiceConnected(ComponentName componentName, IBinder boundService) {
         logUtils.logMethodName_Info();
-        mService = new Messenger(boundService);
-        logUtils.log_Info("BINDED TO REMOTE SERVICE");
-        if (ht.getState() == Thread.State.NEW) {
-            ht.start();
-            looper = ht.getLooper();
-            handler = new Handler(looper, callback);
-            mMessenger = new Messenger(handler);
-            logUtils.log_Info("STARTED MESSENGER");
-        }
+        libService_messenger
+            .addResponse(MSG_NO_REPLY)
+            .addResponse(MSG_REGISTERED_CLIENT, () -> {
+                libService_messenger.log.log_Info("registered");
+                libService_messenger.sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
+            })
+            .addResponse(MSG_UNREGISTERED_CLIENT, () -> {
+                libService_messenger.log.log_Info("unregistered");
+                libService_messenger.sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
+            })
+            .addResponse(MSG_UNREGISTERED_CLIENT, () -> {
+                libService_messenger.log.log_Info("SERVER IS ALIVE");
+                libService_messenger.sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
+            })
+            .addResponse(MSG_REGISTER_ACTIVITY_FAILED, () -> {
+                libService_messenger.sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
+            })
+            .addResponse(MSG_REGISTERED_ACTIVITY, () -> {
+                libService_messenger.sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
+            })
+            .addResponse(MSG_STARTED_TERMINAL_ACTIVITY)
+            .bind(boundService)
+            .start();
 
         // We want to monitor the service for as long as we are
         // connected to it.
         logUtils.log_Info("registering");
-        sendMessageToServer(MSG_REGISTER_CLIENT);
+        libService_messenger.sendMessageToServer(MSG_REGISTER_CLIENT);
 
         for (Runnable action : runnableArrayList) {
             action.run();
@@ -312,11 +165,11 @@ public class TerminalClientAPI implements ServiceConnection {
         }
         Bundle bundle = new Bundle();
         bundle.putParcelable("ACTIVITY", trackedActivity);
-        sendMessageToServer(MSG_REGISTER_ACTIVITY, bundle);
+        libService_messenger.sendMessageToServer(MSG_REGISTER_ACTIVITY, bundle);
     }
 
     public void startTerminalActivity() {
-        sendMessageToServer(MSG_START_TERMINAL_ACTIVITY);
+        libService_messenger.sendMessageToServer(MSG_START_TERMINAL_ACTIVITY);
     }
 
     public void connectToService(Activity activity) {

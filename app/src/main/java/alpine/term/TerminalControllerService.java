@@ -34,6 +34,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 
 import com.example.libclient_service.LibService_Messenger;
+import com.example.libclient_service.LibService_Service_Connection;
 
 import java.util.ArrayList;
 import java.util.Locale;
@@ -41,93 +42,22 @@ import java.util.Locale;
 import alpine.term.emulator.JNI;
 import alpine.term.emulator.TerminalSession;
 
-public class TerminalControllerService implements ServiceConnection {
+public class TerminalControllerService extends LibService_Service_Connection {
 
-    LogUtils logUtils = new LogUtils("Terminal Controller Service");
-
+    TerminalService mTerminalService = null;
+    TerminalControllerService terminalControllerService = null;
     TerminalController terminalController = null;
 
-    /**
-     * Initialized in {@link #onServiceConnected(ComponentName, IBinder)}.
-     */
-    ArrayAdapter<TerminalSession> mListViewAdapter;
-
-    /** Messenger for communicating with the service. */
-    Messenger mService = null;
-
-    /** Flag indicating whether we have called bind on the service. */
-    public boolean mIsBound;
-
-    private ArrayList<Runnable> runnableArrayList = new ArrayList<>();
-
-    boolean isLocalService = false;
-
-    Context context = null;
-
-    LibService_Messenger libService_messenger = new LibService_Messenger();
-
     @Override
-    public void onServiceConnected(ComponentName componentName, IBinder boundService) {
-        logUtils.logMethodName_Info();
-        if (boundService instanceof TerminalService.LocalBinder) {
-            TerminalService.LocalBinder b = (TerminalService.LocalBinder) boundService;
-            terminalController.mTermService = b.service;
-            context = b.service.getApplicationContext();
-            terminalController.mTermService.terminalControllerService = this;
-            logUtils.log_Info("binded to local service");
-            isLocalService = true;
-        } else {
-            libService_messenger
-                .addResponse(TerminalService.MSG_NO_REPLY)
-                .addResponse(TerminalService.MSG_REGISTERED_CLIENT, () -> {
-                    libService_messenger.log.log_Info("registered");
-                    libService_messenger.sendMessageToServerNonBlocking(
-                        TerminalService.MSG_CALLBACK_INVOKED
-                    );
-                })
-                .addResponse(TerminalService.MSG_UNREGISTERED_CLIENT, () -> {
-                    libService_messenger.log.log_Info("unregistered");
-                    libService_messenger.sendMessageToServerNonBlocking(
-                        TerminalService.MSG_CALLBACK_INVOKED
-                    );
-                })
-                .addResponse(TerminalService.MSG_UNREGISTERED_CLIENT, () -> {
-                    libService_messenger.log.log_Info("SERVER IS ALIVE");
-                    libService_messenger.sendMessageToServerNonBlocking(
-                        TerminalService.MSG_CALLBACK_INVOKED
-                    );
-                })
-                .addResponse(TerminalService.MSG_REGISTER_ACTIVITY_FAILED, () -> {
-                    libService_messenger.sendMessageToServerNonBlocking(
-                        TerminalService.MSG_CALLBACK_INVOKED
-                    );
-                })
-                .addResponse(TerminalService.MSG_REGISTERED_ACTIVITY, () -> {
-                    libService_messenger.sendMessageToServerNonBlocking(
-                        TerminalService.MSG_CALLBACK_INVOKED
-                    );
-                })
-                .addResponse(TerminalService.MSG_STARTED_TERMINAL_ACTIVITY);
-            libService_messenger.start(boundService);
-            // We want to monitor the service for as long as we are
-            // connected to it.
-            logUtils.log_Info("registering");
-            libService_messenger.sendMessageToServer(TerminalService.MSG_REGISTER_CLIENT);
-            if (terminalController != null) {
-                if (terminalController.activity == null) {
-                    logUtils.log_Error("activity has not been started");
-                    return;
-                }
-            }
-        }
-        for (Runnable action : runnableArrayList) {
-            action.run();
-        }
-        runnableArrayList.clear();
-        // if this is a remote service, then return
-        if (!isLocalService) return;
-
-        terminalController.mTermService.mSessionChangeCallback = new TerminalSession.SessionChangedCallback() {
+    public void onServiceConnectedCallback() {
+        mTerminalService = (TerminalService) service;
+        terminalControllerService = (TerminalControllerService) service.manager;
+        terminalController = terminalControllerService.terminalController;
+        terminalController.mTermService = mTerminalService;
+        terminalController.terminalControllerService = terminalControllerService;
+        log.errorAndThrowIfNull(mTerminalService, terminalControllerService, terminalController);
+        context = terminalController.activity;
+        mTerminalService.mSessionChangeCallback = new TerminalSession.SessionChangedCallback() {
             @Override
             public void onTextChanged(TerminalSession changedSession) {
                 if (!terminalController.mIsVisible) return;
@@ -160,17 +90,17 @@ public class TerminalControllerService implements ServiceConnection {
 
             @Override
             public void onSessionFinished(final TerminalSession finishedSession) {
-                if (terminalController.mTermService.getSessions().isEmpty()) {
-                    if (terminalController.mTermService.mWantsToStop) {
+                if (mTerminalService.getSessions().isEmpty()) {
+                    if (mTerminalService.mWantsToStop) {
                         // The service wants to stop as soon as possible.
                         terminalController.activity.finish();
                         return;
                     }
 
-                    terminalController.mTermService.terminateService();
+                    mTerminalService.terminateService();
                 } else {
                     terminalController.switchToPreviousSession();
-                    terminalController.mTermService.removeSession(finishedSession);
+                    mTerminalService.removeSession(finishedSession);
                 }
             }
 
@@ -197,7 +127,7 @@ public class TerminalControllerService implements ServiceConnection {
             }
         };
 
-        mListViewAdapter = new ArrayAdapter<TerminalSession>(terminalController.activity, R.layout.line_in_drawer, terminalController.mTermService.getSessions()) {
+        mListViewAdapter = new ArrayAdapter<TerminalSession>(terminalController.activity, R.layout.line_in_drawer, mTerminalService.getSessions()) {
             final StyleSpan boldSpan = new StyleSpan(Typeface.BOLD);
             final StyleSpan italicSpan = new StyleSpan(Typeface.ITALIC);
 
@@ -240,7 +170,7 @@ public class TerminalControllerService implements ServiceConnection {
         };
 
         ListView listView = terminalController.activity.findViewById(R.id.left_drawer_list);
-        mListViewAdapter = new ArrayAdapter<TerminalSession>(terminalController.activity.getApplicationContext(), R.layout.line_in_drawer, terminalController.mTermService.getSessions()) {
+        mListViewAdapter = new ArrayAdapter<TerminalSession>(terminalController.activity.getApplicationContext(), R.layout.line_in_drawer, mTerminalService.getSessions()) {
             final StyleSpan boldSpan = new StyleSpan(Typeface.BOLD);
             final StyleSpan italicSpan = new StyleSpan(Typeface.ITALIC);
 
@@ -291,13 +221,13 @@ public class TerminalControllerService implements ServiceConnection {
             terminalController.getDrawer().closeDrawers();
         });
 
-        if (terminalController.mTermService.getSessions().isEmpty()) {
+        if (mTerminalService.getSessions().isEmpty()) {
             if (terminalController.mIsVisible) {
                 TerminalSession log = createLog(true, context);
                 createLogcat(context);
                 terminalController.switchToSession(log);
                 // create a log and logcat for each registered activity
-                for (TrackedActivity trackedActivity : terminalController.mTermService.mTrackedActivities) {
+                for (TrackedActivity trackedActivity : mTerminalService.mTrackedActivities) {
                     log = createLog(trackedActivity, false, context);
                     createLogcat(trackedActivity, context);
                     terminalController.switchToSession(log);
@@ -311,6 +241,86 @@ public class TerminalControllerService implements ServiceConnection {
         }
     }
 
+    LogUtils logUtils = new LogUtils("Terminal Controller Service");
+
+    /**
+     * Initialized in {@link #onServiceConnected(ComponentName, IBinder)}.
+     */
+    ArrayAdapter<TerminalSession> mListViewAdapter;
+
+    /** Flag indicating whether we have called bind on the service. */
+    public boolean mIsBound;
+
+    private ArrayList<Runnable> runnableArrayList = new ArrayList<>();
+
+    boolean isLocalService = false;
+
+    Context context = null;
+
+    LibService_Messenger libService_messenger = new LibService_Messenger();
+
+    public void onServiceConnected_(ComponentName componentName, IBinder boundService) {
+        logUtils.logMethodName_Info();
+        if (boundService instanceof TerminalService.LocalBinder) {
+//            TerminalService.LocalBinder b = (TerminalService.LocalBinder) boundService;
+//            mTerminalService = b.service;
+//            context = b.service.getApplicationContext();
+//            mTerminalService.terminalControllerService = this;
+//            logUtils.log_Info("binded to local service");
+//            isLocalService = true;
+        } else {
+            libService_messenger
+                .addResponse(TerminalService.MSG_NO_REPLY)
+                .addResponse(TerminalService.MSG_REGISTERED_CLIENT, () -> {
+                    libService_messenger.log.log_Info("registered");
+                    libService_messenger.sendMessageToServerNonBlocking(
+                        TerminalService.MSG_CALLBACK_INVOKED
+                    );
+                })
+                .addResponse(TerminalService.MSG_UNREGISTERED_CLIENT, () -> {
+                    libService_messenger.log.log_Info("unregistered");
+                    libService_messenger.sendMessageToServerNonBlocking(
+                        TerminalService.MSG_CALLBACK_INVOKED
+                    );
+                })
+                .addResponse(TerminalService.MSG_UNREGISTERED_CLIENT, () -> {
+                    libService_messenger.log.log_Info("SERVER IS ALIVE");
+                    libService_messenger.sendMessageToServerNonBlocking(
+                        TerminalService.MSG_CALLBACK_INVOKED
+                    );
+                })
+                .addResponse(TerminalService.MSG_REGISTER_ACTIVITY_FAILED, () -> {
+                    libService_messenger.sendMessageToServerNonBlocking(
+                        TerminalService.MSG_CALLBACK_INVOKED
+                    );
+                })
+                .addResponse(TerminalService.MSG_REGISTERED_ACTIVITY, () -> {
+                    libService_messenger.sendMessageToServerNonBlocking(
+                        TerminalService.MSG_CALLBACK_INVOKED
+                    );
+                })
+                .addResponse(TerminalService.MSG_STARTED_TERMINAL_ACTIVITY)
+                .bind(boundService)
+                .start();
+            // We want to monitor the service for as long as we are
+            // connected to it.
+            logUtils.log_Info("registering");
+            libService_messenger.sendMessageToServer(TerminalService.MSG_REGISTER_CLIENT);
+            if (terminalController != null) {
+                if (terminalController.activity == null) {
+                    logUtils.log_Error("activity has not been started");
+                    return;
+                }
+            }
+        }
+        for (Runnable action : runnableArrayList) {
+            action.run();
+        }
+        runnableArrayList.clear();
+        // if this is a remote service, then return
+        if (!isLocalService) return;
+    }
+
     @Override
     public void onServiceDisconnected(ComponentName name) {
         // Respect being stopped from the TerminalService notification action.
@@ -319,7 +329,7 @@ public class TerminalControllerService implements ServiceConnection {
 
     public TerminalSession getCurrentSession() {
         return
-            terminalController.mTermService == null
+            mTerminalService == null
                 ? null : terminalController.mTerminalView.getCurrentSession();
     }
 
@@ -328,14 +338,15 @@ public class TerminalControllerService implements ServiceConnection {
     }
 
     public TerminalSession createLog(TrackedActivity trackedActivity, boolean printWelcomeMessage, Context context) {
-        if (terminalController.mTermService == null) {
-            logUtils.log_Error("error: terminalController.mTermService is null");
+        log.errorAndThrowIfNull(context, "a context is required");
+        if (mTerminalService == null) {
+            logUtils.log_Error("error: mTerminalService is null");
             return null;
         }
         TerminalSession session;
         TerminalSession currentSession = terminalController.mTerminalView.getCurrentSession();
 
-        session = terminalController.mTermService.createShellSession(true, trackedActivity, printWelcomeMessage, context);
+        session = mTerminalService.createShellSession(true, trackedActivity, printWelcomeMessage, context);
         terminalController.mTerminalView.attachSession(session);
 
         int logPid;
@@ -366,15 +377,16 @@ public class TerminalControllerService implements ServiceConnection {
     }
 
     public TerminalSession createLogcat(TrackedActivity trackedActivity, boolean useRoot, Context context) {
-        if (terminalController.mTermService == null) {
-            logUtils.log_Error("error: terminalController.mTermService is null");
+        log.errorAndThrowIfNull(context, "a context is required");
+        if (mTerminalService == null) {
+            logUtils.log_Error("error: mTerminalService is null");
             return null;
         }
 
         TerminalSession session;
         TerminalSession currentSession = terminalController.mTerminalView.getCurrentSession();
 
-        session = terminalController.mTermService.createLogcatSession(trackedActivity, useRoot, context);
+        session = mTerminalService.createLogcatSession(trackedActivity, useRoot, context);
         terminalController.mTerminalView.attachSession(session);
 
         int logPid;
@@ -403,15 +415,15 @@ public class TerminalControllerService implements ServiceConnection {
     }
 
     public TerminalSession createShell(TrackedActivity trackedActivity, Context context) {
-        if (terminalController.mTermService == null) {
-            logUtils.log_Error("error: terminalController.mTermService is null");
+        if (mTerminalService == null) {
+            logUtils.log_Error("error: mTerminalService is null");
             return null;
         }
 
         TerminalSession session;
         TerminalSession currentSession = terminalController.mTerminalView.getCurrentSession();
 
-        session = terminalController.mTermService.createShellSession(false, trackedActivity, false, context);
+        session = mTerminalService.createShellSession(false, trackedActivity, false, context);
         terminalController.mTerminalView.attachSession(session);
 
         int shellPid;
@@ -431,13 +443,13 @@ public class TerminalControllerService implements ServiceConnection {
 
     public Boolean isCurrentSessionShell() {
         return
-            terminalController.mTermService == null
+            mTerminalService == null
                 ? null : terminalController.mTerminalView.getCurrentSession().isShell();
     }
 
     public Boolean isCurrentSessionLogView() {
         return
-            terminalController.mTermService == null
+            mTerminalService == null
                 ? null : terminalController.mTerminalView.getCurrentSession().isLogView();
     }
 

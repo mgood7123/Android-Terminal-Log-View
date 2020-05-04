@@ -427,6 +427,21 @@ public final class TerminalEmulator {
             mTabStop[i] = (i & 7) == 0 && i != 0;
     }
 
+    public void append(String message) {
+        if (message.endsWith("\n")) message += "\r";
+        byte[] bytes = message.getBytes(StandardCharsets.UTF_8);
+        append(bytes, bytes.length);
+    }
+
+    public void appendLine(String message) {
+        if (!message.endsWith("\n\r")) {
+            if (message.endsWith("\n")) message += "\r";
+            else message += "\n\r";
+        }
+        byte[] bytes = message.getBytes(StandardCharsets.UTF_8);
+        append(bytes, bytes.length);
+    }
+
     /**
      * Accept bytes (typically from the pseudo-teletype) and process them.
      *

@@ -169,6 +169,24 @@ public class LibService_LogUtils {
         return object;
     }
 
+    public final void errorAndThrowIfNull(@Nullable Object ... objects) {
+        assertNotNull(ERRORMESSAGE, objects);
+        for (int i = 0, objectsLength = objects.length; i < objectsLength; i++) {
+            Object object = objects[i];
+            assertNotNull(ERRORMESSAGE, object);
+        }
+    }
+
+    public final void errorAndThrowIfNull(String message, @Nullable Object ... objects) {
+        if (message == null) assertNotNull(ERRORMESSAGE, objects);
+        else assertNotNull(message, objects);
+        for (int i = 0, objectsLength = objects.length; i < objectsLength; i++) {
+            Object object = objects[i];
+            if (message == null) assertNotNull(ERRORMESSAGE, object);
+            else assertNotNull(message, object);
+        }
+    }
+
     @SuppressWarnings("ConstantOnRightSideOfComparison")
     public final void errorAndThrow(String message) {
         assertNotNull(message, null);

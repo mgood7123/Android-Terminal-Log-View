@@ -429,8 +429,8 @@ public final class TerminalView extends View {
      * @param session The {@link TerminalSession} this view will be displaying.
      */
     public boolean attachSession(TerminalSession session) {
-        if (session == mTermSession) return false;
         logUtils.errorAndThrowIfNull(session);
+        if (session == mTermSession) return false;
         mTopRow = 0;
         mTermSession = session;
         mEmulator = mTermSession.getEmulator();

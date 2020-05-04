@@ -187,6 +187,19 @@ public class LibService_Messenger {
 
     private ArrayList<Response> responses = new ArrayList<>();
 
+    /*
+server.defineResponseCodes(
+    // service
+    {
+        // ...
+    },
+    // client
+    {
+        // ...
+    }
+};
+     */
+
     public LibService_Messenger addResponse(int what) {
         Response response = new Response();
         response.what = what;
@@ -202,9 +215,13 @@ public class LibService_Messenger {
         return this;
     }
 
-    public void start(IBinder serviceContainingMessenger) {
+    public LibService_Messenger bind (IBinder serviceContainingMessenger) {
         messengerToSendMessagesTo = new Messenger(serviceContainingMessenger);
         log.log_Info("binded to remote service");
+        return this;
+    }
+
+    public LibService_Messenger start() {
         if (handlerThread.getState() == Thread.State.NEW) {
             handlerThread.start();
             looper = handlerThread.getLooper();
@@ -212,6 +229,11 @@ public class LibService_Messenger {
             messengerToHandleMessages = new Messenger(handler);
             log.log_Info("started messenger");
         }
+        return this;
+    }
+
+    public IBinder getBinder() {
+        return messengerToHandleMessages.getBinder();
     }
 }
 

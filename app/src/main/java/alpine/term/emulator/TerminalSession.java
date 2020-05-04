@@ -262,6 +262,7 @@ public final class TerminalSession extends TerminalOutput {
     }
 
     public void createLogSession(int columns, int rows, Context context) {
+        logUtils.errorAndThrowIfNull(context, "a context is required");
         logUtils.log_Info("creating log");
         final FileDescriptor terminalFileDescriptorWrapped;
         if (isTrackedActivity) {
@@ -273,10 +274,11 @@ public final class TerminalSession extends TerminalOutput {
             mShellPid = trackedActivityPid;
         } else {
             logUtils.log_Info("creating new FileDescriptor");
-            terminalFileDescriptorWrapped = wrapFileDescriptor(JNI.createPseudoTerminal(printWelcomeMessage)[0]);
+            int fd = JNI.createPseudoTerminal(printWelcomeMessage)[0];
+            terminalFileDescriptorWrapped = wrapFileDescriptor(fd);
             mShellPid = JNI.getPid();
         }
-        if (terminalFileDescriptorWrapped == null) throw new NullPointerException();
+        logUtils.errorAndThrowIfNull(terminalFileDescriptorWrapped);
         JNI.puts("created log");
         logUtils.log_Info("created log");
 
@@ -292,18 +294,24 @@ public final class TerminalSession extends TerminalOutput {
                     FileOutputStream logFile = new FileOutputStream(log);
                     FileDescriptor logFileFileDescriptor = logFile.getFD();
                     while (true) {
+                        logUtils.log_Info("stdout/stderr reader reading from stdout");
                         int read = termIn.read(buffer);
+                        logUtils.log_Info("stdout/stderr reader read from stdout");
                         if (read == -1) {
                             logUtils.log_Error("stdout/stderr reader return -1");
                             return;
                         }
                         logFile.write(buffer, 0, read);
                         logFileFileDescriptor.sync();
+                        logUtils.log_Info("stdout/stderr reader writing");
                         if (!mProcessToTerminalIOQueue.write(buffer, 0, read)) {
                             logUtils.log_Error("stdout/stderr reader [write] returned false (closed)");
                             return;
                         }
+                        logUtils.log_Info("stdout/stderr reader wrote");
+                        logUtils.log_Info("stdout/stderr reader notifying");
                         mMainThreadHandler.sendEmptyMessage(MSG_NEW_INPUT);
+                        logUtils.log_Info("stdout/stderr reader notified");
                     }
                 } catch (Exception e) {
                     // Ignore, just shutting down.
@@ -313,6 +321,7 @@ public final class TerminalSession extends TerminalOutput {
     }
 
     public void createLogcatSession(int columns, int rows, Context context) {
+        logUtils.errorAndThrowIfNull(context, "a context is required");
         logUtils.log_Info("creating Logcat");
         logUtils.errorAndThrowIfNull(mArgs);
         logUtils.errorAndThrowIfNull(mEnv);
@@ -323,7 +332,7 @@ public final class TerminalSession extends TerminalOutput {
         logUtils.log_Info("created Logcat");
 
         final FileDescriptor terminalFileDescriptorWrapped = wrapFileDescriptor(mTerminalFileDescriptor);
-        if (terminalFileDescriptorWrapped == null) throw new NullPointerException();
+        logUtils.errorAndThrowIfNull(terminalFileDescriptorWrapped);
 
         new Thread("TermSessionInputReader (stdout/stderr) [Logcat (pid=" + mShellPid + ")]") {
             @Override
@@ -368,6 +377,7 @@ public final class TerminalSession extends TerminalOutput {
     public void initializeEmulator(int columns, int rows, Context context) {
         mEmulator = new TerminalEmulator(this, columns, rows, /* transcript= */5000);
         mEmulator.currentFontSize = 24;
+        mEmulator.appendLine("initializing...");
 
         if (isLogView) {
             // should this be true for a shell as well?
@@ -383,8 +393,8 @@ public final class TerminalSession extends TerminalOutput {
                     public void run() {
                         while (true) {
                             int processExitCode = JNI.waitFor(mShellPid);
-                            byte[] bytesToWrite = String.format(Locale.ENGLISH, "Logcat returned %d\n\rrestarting...\n\r", processExitCode).getBytes(StandardCharsets.UTF_8);
-                            mEmulator.append(bytesToWrite, bytesToWrite.length);
+                            mEmulator.appendLine("Logcat returned " + processExitCode);
+                            mEmulator.appendLine("restarting...");
                             createLogcatSession(columns, rows, context);
                         }
                     }
@@ -398,19 +408,16 @@ public final class TerminalSession extends TerminalOutput {
                 @Override
                 public void run() {
                     int processExitCode = JNI.waitFor(mShellPid);
-                    byte[] bytesToWrite = String.format(Locale.ENGLISH, "shell returned %d\n\r", processExitCode).getBytes(StandardCharsets.UTF_8);
-                    mEmulator.append(bytesToWrite, bytesToWrite.length);
+                    mEmulator.appendLine("shell returned " + processExitCode);
                     should_exit = true;
                     mMainThreadHandler.sendMessage(mMainThreadHandler.obtainMessage(MSG_PROCESS_EXITED, processExitCode));
                 }
             }.start();
         }
-
-        {
-            String fmt = "emulator initialized";
-            JNI.puts(fmt);
-            logUtils.log_Info(fmt);
-        }
+        mEmulator.appendLine("initialized");
+        String fmt = "emulator initialized";
+        JNI.puts(fmt);
+        logUtils.log_Info(fmt);
     }
 
     /** Write data to the shell process. */

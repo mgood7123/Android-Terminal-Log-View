@@ -32,6 +32,8 @@ import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.viewpager.widget.PagerAdapter;
 import androidx.viewpager.widget.ViewPager;
 
+import com.example.libclient_service.LibService_Service;
+
 import java.io.File;
 import java.io.FileDescriptor;
 import java.io.IOException;
@@ -73,6 +75,8 @@ public class TerminalController {
 
     AssetManager assetManager;
 
+    LibService_Service service = new LibService_Service();
+
     TerminalService mTermService;
     TerminalControllerService terminalControllerService;
 
@@ -87,7 +91,16 @@ public class TerminalController {
     RelativeLayout terminalContainer;
     RelativeLayout mainView;
 
+    void bind() {
+        terminalControllerService = new TerminalControllerService();
+        terminalControllerService.terminalController = this;
+        int managerId = service.addServiceManager(terminalControllerService);
+        service.addService(TerminalService.class, managerId);
+        service.bindLocal(activity, managerId);
+    }
+
     public void onCreate(Activity activity, TerminalView viewById) {
+
         inflater = LayoutInflater.from(activity);
         this.activity = activity;
         assetManager = activity.getAssets();
@@ -191,16 +204,7 @@ public class TerminalController {
 
         activity.registerForContextMenu(mTerminalView);
 
-        terminalControllerService = new TerminalControllerService();
-        terminalControllerService.terminalController = this;
-
-        Intent serviceIntent = new Intent(activity, TerminalService.class);
-        serviceIntent.putExtra("BINDING_TYPE", "BINDING_LOCAL");
-        // Start the service and make it run regardless of who is bound to it:
-        activity.startService(serviceIntent);
-        if (!activity.bindService(serviceIntent, terminalControllerService, 0)) {
-            throw new RuntimeException("bindService() failed");
-        }
+        bind();
 
         Button create_shell = activity.findViewById(R.id.create_new_shell);
         create_shell.setOnClickListener(new View.OnClickListener() {
@@ -457,8 +461,12 @@ public class TerminalController {
         terminalControllerService.terminalController.activity.runOnUiThread(new Runnable() {
             @Override
             public void run() {
+                logUtils.log_Info("notifying data set changed");
                 terminalControllerService.mListViewAdapter.notifyDataSetChanged();
+                logUtils.log_Info("notified data set changed");
+                logUtils.log_Info("attaching session");
                 mTerminalView.attachSession(session);
+                logUtils.log_Info("attached session");
             }
         });
         if (mIsVisible) {

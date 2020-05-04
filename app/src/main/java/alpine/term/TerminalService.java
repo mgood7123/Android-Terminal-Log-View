@@ -47,6 +47,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 import androidx.core.app.NotificationCompat;
+
+import com.example.libclient_service.LibService_Service_Component;
+
 import alpine.term.emulator.JNI;
 import alpine.term.emulator.TerminalSession;
 import alpine.term.emulator.TerminalSession.SessionChangedCallback;
@@ -65,7 +68,7 @@ import static android.content.Intent.FLAG_ACTIVITY_NEW_TASK;
  * Optionally may hold a wake and a wifi lock, in which case that is shown in the notification - see
  * {@link #buildNotification()}.
  */
-public class TerminalService extends Service implements SessionChangedCallback {
+public class TerminalService extends LibService_Service_Component implements SessionChangedCallback {
 
     LogUtils logUtils = new LogUtils("Terminal Service");
 
@@ -75,9 +78,6 @@ public class TerminalService extends Service implements SessionChangedCallback {
 
     private static final int NOTIFICATION_ID = 1338;
     private static final String NOTIFICATION_CHANNEL_ID = "alpine.term.NOTIFICATION_CHANNEL";
-
-    /** Keeps track of all current registered clients. */
-    ArrayList<Messenger> mClients = new ArrayList<Messenger>();
 
     /**
      * Command to the service to register a client, receiving callbacks
@@ -137,7 +137,6 @@ public class TerminalService extends Service implements SessionChangedCallback {
      */
     private PowerManager.WakeLock mWakeLock;
     private WifiManager.WifiLock mWifiLock;
-
 
     @Override
     public void onCreate() {
@@ -450,20 +449,6 @@ public class TerminalService extends Service implements SessionChangedCallback {
                 }
             }
         }
-    }
-
-    /**
-     * When binding to the service, we return an interface to our messenger
-     * for sending messages to the service.
-     */
-    @Override
-    public IBinder onBind(Intent intent) {
-        if (intent.hasExtra("BINDING_TYPE")) {
-            if (intent.getStringExtra("BINDING_TYPE").contentEquals("BINDING_LOCAL")) {
-                return new LocalBinder();
-            }
-        }
-        return setMessenger().getBinder();
     }
 
     @Override
