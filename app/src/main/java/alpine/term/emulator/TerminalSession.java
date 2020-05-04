@@ -377,7 +377,7 @@ public final class TerminalSession extends TerminalOutput {
     public void initializeEmulator(int columns, int rows, Context context) {
         mEmulator = new TerminalEmulator(this, columns, rows, /* transcript= */5000);
         mEmulator.currentFontSize = 24;
-        mEmulator.appendLine("initializing...");
+        mEmulator.appendLine("Terminal Emulator: Initializing...");
 
         if (isLogView) {
             // should this be true for a shell as well?
@@ -414,7 +414,7 @@ public final class TerminalSession extends TerminalOutput {
                 }
             }.start();
         }
-        mEmulator.appendLine("initialized");
+        mEmulator.appendLine("Terminal Emulator: Initialized");
         String fmt = "emulator initialized";
         JNI.puts(fmt);
         logUtils.log_Info(fmt);
