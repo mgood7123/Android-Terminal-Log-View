@@ -53,9 +53,9 @@ public class TerminalControllerService extends LibService_Service_Connection {
         mTerminalService = (TerminalService) service;
         terminalControllerService = (TerminalControllerService) service.manager;
         terminalController = terminalControllerService.terminalController;
+        log.errorAndThrowIfNull(mTerminalService, terminalControllerService, terminalController);
         terminalController.mTermService = mTerminalService;
         terminalController.terminalControllerService = terminalControllerService;
-        log.errorAndThrowIfNull(mTerminalService, terminalControllerService, terminalController);
         context = terminalController.activity;
         mTerminalService.mSessionChangeCallback = new TerminalSession.SessionChangedCallback() {
             @Override
