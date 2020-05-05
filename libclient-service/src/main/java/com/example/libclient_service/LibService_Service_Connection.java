@@ -27,7 +27,10 @@ public abstract class LibService_Service_Connection implements ServiceConnection
 
     public LibService_Service_Component service = null;
 
-    public abstract void onServiceConnectedCallback();
+    public final void onServiceConnectedCallback() {
+        onServiceConnectedCallback(null);
+    };
+    public abstract void onServiceConnectedCallback(IBinder boundService);
 
     @Override
     public void onServiceConnected(ComponentName componentName, IBinder boundService) {
@@ -43,7 +46,7 @@ public abstract class LibService_Service_Connection implements ServiceConnection
             log.errorAndThrowIfNull(service);
             onServiceConnectedCallback();
         } else {
-            log.errorAndThrowIfNull(service);
+            onServiceConnectedCallback(boundService);
         }
     }
 

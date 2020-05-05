@@ -51,7 +51,7 @@ public class TerminalControllerService extends LibService_Service_Connection {
     TerminalController terminalController = null;
 
     @Override
-    public void onServiceConnectedCallback() {
+    public void onServiceConnectedCallback(IBinder boundService) {
 
         mTerminalService = (TerminalService) service;
         terminalControllerService = (TerminalControllerService) service.manager;
@@ -59,7 +59,6 @@ public class TerminalControllerService extends LibService_Service_Connection {
         log.errorAndThrowIfNull(mTerminalService, terminalControllerService);
 
         mTerminalService.terminalControllerService = this;
-
 
         terminalController.mTermService = mTerminalService;
         terminalController.terminalControllerService = terminalControllerService;

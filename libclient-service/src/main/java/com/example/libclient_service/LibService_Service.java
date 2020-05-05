@@ -28,7 +28,7 @@ public class LibService_Service {
         LibService_Service_Connection manager = connections.get(managerId);
         manager.activity = activity;
 
-        // start each component in the component list
+        // start and bind each component in the component list
         for (int i = 0, componentsSize = manager.components.size(); i < componentsSize; i++) {
             Class<? extends LibService_Service_Component> service = manager.components.get(i);
             Intent serviceIntent = new Intent(activity.getApplicationContext(), service);
