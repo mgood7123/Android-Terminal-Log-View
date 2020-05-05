@@ -19,7 +19,7 @@ public abstract class LibService_Service_Component extends Service {
     /** Keeps track of all current registered clients. */
     public ArrayList<Messenger> mClients = new ArrayList<Messenger>();
 
-    public LibService_Messenger messenger = new LibService_Messenger();
+    public final LibService_Messenger messenger = new LibService_Messenger("Service");
 
     public LibService_Service_Connection manager = null;
 

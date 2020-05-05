@@ -21,7 +21,15 @@ import java.util.ArrayList;
 
 public class LibService_Messenger {
 
-    public LibService_LogUtils log = new LibService_LogUtils("LibService - libMessenger");
+    public LibService_LogUtils log;
+
+    LibService_Messenger() {
+        log = new LibService_LogUtils("LibService - LibMessenger - NO IDENTIFIER SUPPLIED");
+    }
+
+    LibService_Messenger(String identifier) {
+         log = new LibService_LogUtils("LibService - LibMessenger - " + identifier);
+    }
 
     /**
      * this object is used for synchronization
@@ -157,7 +165,7 @@ public class LibService_Messenger {
         }
     };
 
-    public final HandlerThread handlerThread = new HandlerThread("libMessenger");
+    public final HandlerThread handlerThread = new HandlerThread("LibMessenger");
     public Looper looper;
     public Handler handler;
     public final Handler.Callback callback = new Handler.Callback() {

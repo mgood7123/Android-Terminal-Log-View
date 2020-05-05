@@ -66,27 +66,30 @@ public class TerminalClientAPI extends LibService_Client {
 
     private ArrayList<Runnable> runnableArrayList = new ArrayList<>();
 
+    public int MSG_REGISTRATION_CONFIRMED = 12345;
+
     @Override
     public void onServiceConnectedCallback(IBinder boundService) {
-        libService_messenger
+        messenger
             .addResponse(MSG_NO_REPLY)
             .addResponse(MSG_REGISTERED_CLIENT, (message) -> {
-                libService_messenger.log.log_Info("registered");
-                libService_messenger.sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
+                messenger.log.log_Info("registered");
+                messenger.sendMessageToServerNonBlocking(MSG_REGISTRATION_CONFIRMED);
+                messenger.log.log_Info("sent message to server");
             })
             .addResponse(MSG_UNREGISTERED_CLIENT, (message) -> {
-                libService_messenger.log.log_Info("unregistered");
-                libService_messenger.sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
+                messenger.log.log_Info("unregistered");
+                messenger.sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
             })
             .addResponse(MSG_UNREGISTERED_CLIENT, (message) -> {
-                libService_messenger.log.log_Info("SERVER IS ALIVE");
-                libService_messenger.sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
+                messenger.log.log_Info("SERVER IS ALIVE");
+                messenger.sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
             })
             .addResponse(MSG_REGISTER_ACTIVITY_FAILED, (message) -> {
-                libService_messenger.sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
+                messenger.sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
             })
             .addResponse(MSG_REGISTERED_ACTIVITY, (message) -> {
-                libService_messenger.sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
+                messenger.sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
             })
             .addResponse(MSG_STARTED_TERMINAL_ACTIVITY)
             .bind(boundService)
@@ -95,7 +98,7 @@ public class TerminalClientAPI extends LibService_Client {
         // We want to monitor the service for as long as we are
         // connected to it.
         logUtils.log_Info("registering");
-        libService_messenger.sendMessageToServer(MSG_REGISTER_CLIENT);
+        messenger.sendMessageToServer(MSG_REGISTER_CLIENT);
 
         for (Runnable action : runnableArrayList) {
             action.run();
@@ -149,10 +152,10 @@ public class TerminalClientAPI extends LibService_Client {
         }
         Bundle bundle = new Bundle();
         bundle.putParcelable("ACTIVITY", trackedActivity);
-        libService_messenger.sendMessageToServer(MSG_REGISTER_ACTIVITY, bundle);
+        messenger.sendMessageToServer(MSG_REGISTER_ACTIVITY, bundle);
     }
 
     public void startTerminalActivity() {
-        libService_messenger.sendMessageToServer(MSG_START_TERMINAL_ACTIVITY);
+        messenger.sendMessageToServer(MSG_START_TERMINAL_ACTIVITY);
     }
 }

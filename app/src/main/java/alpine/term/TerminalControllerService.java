@@ -264,54 +264,6 @@ public class TerminalControllerService extends LibService_Service_Connection {
 
     Context context = null;
 
-    LibService_Messenger libService_messenger = new LibService_Messenger();
-
-    public void onServiceConnected_(ComponentName componentName, IBinder boundService) {
-        logUtils.logMethodName_Info();
-        if (! (boundService instanceof TerminalService.LocalBinder)) {
-        } else {
-            libService_messenger
-                .addResponse(TerminalService.MSG_NO_REPLY)
-                .addResponse(TerminalService.MSG_REGISTERED_CLIENT, (message) -> {
-                    libService_messenger.log.log_Info("registered");
-                    libService_messenger.sendMessageToServerNonBlocking(
-                        TerminalService.MSG_CALLBACK_INVOKED
-                    );
-                })
-                .addResponse(TerminalService.MSG_UNREGISTERED_CLIENT, (message) -> {
-                    libService_messenger.log.log_Info("unregistered");
-                    libService_messenger.sendMessageToServerNonBlocking(
-                        TerminalService.MSG_CALLBACK_INVOKED
-                    );
-                })
-                .addResponse(TerminalService.MSG_UNREGISTERED_CLIENT, (message) -> {
-                    libService_messenger.log.log_Info("SERVER IS ALIVE");
-                    libService_messenger.sendMessageToServerNonBlocking(
-                        TerminalService.MSG_CALLBACK_INVOKED
-                    );
-                })
-                .addResponse(TerminalService.MSG_REGISTER_ACTIVITY_FAILED, (message) -> {
-                    libService_messenger.sendMessageToServerNonBlocking(
-                        TerminalService.MSG_CALLBACK_INVOKED
-                    );
-                })
-                .addResponse(TerminalService.MSG_REGISTERED_ACTIVITY, (message) -> {
-                    libService_messenger.sendMessageToServerNonBlocking(
-                        TerminalService.MSG_CALLBACK_INVOKED
-                    );
-                })
-                .addResponse(TerminalService.MSG_STARTED_TERMINAL_ACTIVITY)
-                .bind(boundService)
-                .start();
-        }
-        for (Runnable action : runnableArrayList) {
-            action.run();
-        }
-        runnableArrayList.clear();
-        // if this is a remote service, then return
-        if (!isLocalService) return;
-    }
-
     @Override
     public void onServiceDisconnected(ComponentName name) {
         // Respect being stopped from the TerminalService notification action.
@@ -493,13 +445,13 @@ public class TerminalControllerService extends LibService_Service_Connection {
         }
         Bundle bundle = new Bundle();
         bundle.putParcelable("ACTIVITY", trackedActivity);
-        libService_messenger.sendMessageToServer(TerminalService.MSG_REGISTER_ACTIVITY, bundle);
+        messenger.sendMessageToServer(TerminalService.MSG_REGISTER_ACTIVITY, bundle);
     }
 
     public void startTerminalActivity() {
         runWhenConnectedToService(
             () -> {
-                libService_messenger.sendMessageToServer(
+                messenger.sendMessageToServer(
                     TerminalService.MSG_START_TERMINAL_ACTIVITY
                 );
             }

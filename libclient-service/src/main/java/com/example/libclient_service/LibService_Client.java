@@ -10,7 +10,7 @@ public abstract class LibService_Client {
 
     private LibService_LogUtils log = new LibService_LogUtils("LibService - Client ");
 
-    public final LibService_Messenger libService_messenger = new LibService_Messenger();
+    public final LibService_Messenger messenger = new LibService_Messenger("Client");
 
     public final void onServiceConnectedCallback() {
         onServiceConnectedCallback(null);
@@ -20,7 +20,7 @@ public abstract class LibService_Client {
     LibService_Service_Connection connection = new LibService_Service_Connection() {
         @Override
         public void onServiceConnectedCallback(IBinder boundService) {
-            libService_messenger.bind(boundService).start();
+            messenger.bind(boundService).start();
             LibService_Client.this.onServiceConnectedCallback(boundService);
         }
     };

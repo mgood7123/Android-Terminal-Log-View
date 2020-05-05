@@ -15,11 +15,11 @@ public abstract class LibService_Service_Connection implements ServiceConnection
 
     public LibService_LogUtils log = new LibService_LogUtils("LibService - Service Connection");
 
+    public final LibService_Messenger messenger = new LibService_Messenger("Service Connection");
+
     ArrayList<Class<? extends LibService_Service_Component>> components = new ArrayList<>();
 
     boolean isLocalService = false;
-
-    LibService_Messenger libService_messenger = new LibService_Messenger();
 
     Activity activity = null;
 
