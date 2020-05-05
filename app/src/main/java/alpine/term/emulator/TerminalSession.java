@@ -294,24 +294,18 @@ public final class TerminalSession extends TerminalOutput {
                     FileOutputStream logFile = new FileOutputStream(log);
                     FileDescriptor logFileFileDescriptor = logFile.getFD();
                     while (true) {
-                        logUtils.log_Info("stdout/stderr reader reading from stdout");
                         int read = termIn.read(buffer);
-                        logUtils.log_Info("stdout/stderr reader read from stdout");
                         if (read == -1) {
                             logUtils.log_Error("stdout/stderr reader return -1");
                             return;
                         }
                         logFile.write(buffer, 0, read);
                         logFileFileDescriptor.sync();
-                        logUtils.log_Info("stdout/stderr reader writing");
                         if (!mProcessToTerminalIOQueue.write(buffer, 0, read)) {
                             logUtils.log_Error("stdout/stderr reader [write] returned false (closed)");
                             return;
                         }
-                        logUtils.log_Info("stdout/stderr reader wrote");
-                        logUtils.log_Info("stdout/stderr reader notifying");
                         mMainThreadHandler.sendEmptyMessage(MSG_NEW_INPUT);
-                        logUtils.log_Info("stdout/stderr reader notified");
                     }
                 } catch (Exception e) {
                     // Ignore, just shutting down.
