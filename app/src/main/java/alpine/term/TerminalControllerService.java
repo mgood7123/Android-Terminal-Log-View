@@ -45,15 +45,22 @@ import alpine.term.emulator.TerminalSession;
 public class TerminalControllerService extends LibService_Service_Connection {
 
     TerminalService mTerminalService = null;
-    TerminalControllerService terminalControllerService = null;
+    TerminalControllerService terminalControllerService = this;
+
+    // this value is set when this instance is created
     TerminalController terminalController = null;
 
     @Override
     public void onServiceConnectedCallback() {
+
         mTerminalService = (TerminalService) service;
         terminalControllerService = (TerminalControllerService) service.manager;
-        terminalController = terminalControllerService.terminalController;
-        log.errorAndThrowIfNull(mTerminalService, terminalControllerService, terminalController);
+
+        log.errorAndThrowIfNull(mTerminalService, terminalControllerService);
+
+        mTerminalService.terminalControllerService = this;
+
+
         terminalController.mTermService = mTerminalService;
         terminalController.terminalControllerService = terminalControllerService;
         context = terminalController.activity;

@@ -207,7 +207,6 @@ public class TerminalService extends LibService_Service_Component implements Ses
 
     @Override
     public void onMessengerBindRemote() {
-        terminalControllerService = (TerminalControllerService) manager;
         messenger.defaultCallback = null;
         messenger
             .addResponse(MSG_REGISTER_CLIENT, new RunnableArgument<Message>() {
@@ -289,7 +288,6 @@ public class TerminalService extends LibService_Service_Component implements Ses
     @SuppressLint({"Wakelock", "WakelockTimeout"})
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-//        messenger.start();
         String action = intent.getAction();
         if (INTENT_ACTION_SERVICE_STOP.equals(action)) {
             terminateService();
