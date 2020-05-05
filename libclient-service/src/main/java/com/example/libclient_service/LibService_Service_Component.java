@@ -10,11 +10,11 @@ import androidx.annotation.Nullable;
 
 import java.util.ArrayList;
 
-public class LibService_Service_Component extends Service {
+public abstract class LibService_Service_Component extends Service {
 
     Runnable onCreateCallback = null;
 
-    private LibService_LogUtils log = new LibService_LogUtils("libService - Service - Component");
+    public LibService_LogUtils log = new LibService_LogUtils("LibService - Service - Component");
 
     /** Keeps track of all current registered clients. */
     public ArrayList<Messenger> mClients = new ArrayList<Messenger>();
@@ -30,14 +30,19 @@ public class LibService_Service_Component extends Service {
         public final LibService_Service_Component service = LibService_Service_Component.this;
     }
 
+    public abstract void onMessengerBindLocal();
+    public abstract void onMessengerBindRemote();
+
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
         if (intent.hasExtra("BINDING_TYPE")) {
             if (intent.getStringExtra("BINDING_TYPE").contentEquals("BINDING_LOCAL")) {
+                onMessengerBindLocal();
                 return new Local();
             }
         }
+        onMessengerBindRemote();
         return messenger.start().getBinder();
     }
 

@@ -8,11 +8,12 @@ import androidx.annotation.Nullable;
 /** an embedded copy of my LogUtils library */
 
 public class LibService_LogUtils {
-    private String TAG = "";
-    private String ERRORMESSAGE = "An error has occured";
+    public final String TAG;
+    public final String ERRORMESSAGE;
 
     public LibService_LogUtils(String tag) {
         TAG = tag;
+        ERRORMESSAGE = "An error has occured";
     }
 
     public LibService_LogUtils(String tag, String errorMessage) {
@@ -75,7 +76,7 @@ public class LibService_LogUtils {
      * okay)
      * @see AssertionError
      */
-    static public void fail(String message) {
+    public void fail(String message) {
         if (message == null) {
             throw new AssertionError();
         }
@@ -90,9 +91,21 @@ public class LibService_LogUtils {
      * okay)
      * @param condition condition to be checked
      */
-    static public void assertTrue(String message, boolean condition) {
+    public void assertTrue(String message, boolean condition) {
         if (!condition) {
             fail(message);
+        }
+    }
+
+    /**
+     * Asserts that a condition is true. If it isn't it throws an
+     * {@link AssertionError} with the given message.
+     *
+     * @param condition condition to be checked
+     */
+    public void assertTrue(boolean condition) {
+        if (!condition) {
+            fail(ERRORMESSAGE);
         }
     }
 
@@ -104,8 +117,10 @@ public class LibService_LogUtils {
      * okay)
      * @param object Object to check or <code>null</code>
      */
-    static public void assertNotNull(String message, Object object) {
+    public void assertNotNull(String message, Object object) {
+        log_Info("checking if object is null...");
         assertTrue(message, object != null);
+        log_Info("checking if object is not null");
     }
 
     public final Throwable error() {

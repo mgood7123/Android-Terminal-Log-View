@@ -10,7 +10,7 @@ import android.app.Activity;
 
 public class LibService_Service {
 
-    private LibService_LogUtils log = new LibService_LogUtils("libService - Service");
+    private LibService_LogUtils log = new LibService_LogUtils("LibService - Service");
 
     ArrayList<LibService_Service_Connection> connections = new ArrayList<>();
 

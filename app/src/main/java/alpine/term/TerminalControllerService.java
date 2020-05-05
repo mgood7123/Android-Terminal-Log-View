@@ -57,6 +57,7 @@ public class TerminalControllerService extends LibService_Service_Connection {
         terminalController.mTermService = mTerminalService;
         terminalController.terminalControllerService = terminalControllerService;
         context = terminalController.activity;
+
         mTerminalService.mSessionChangeCallback = new TerminalSession.SessionChangedCallback() {
             @Override
             public void onTextChanged(TerminalSession changedSession) {
@@ -261,40 +262,34 @@ public class TerminalControllerService extends LibService_Service_Connection {
 
     public void onServiceConnected_(ComponentName componentName, IBinder boundService) {
         logUtils.logMethodName_Info();
-        if (boundService instanceof TerminalService.LocalBinder) {
-//            TerminalService.LocalBinder b = (TerminalService.LocalBinder) boundService;
-//            mTerminalService = b.service;
-//            context = b.service.getApplicationContext();
-//            mTerminalService.terminalControllerService = this;
-//            logUtils.log_Info("binded to local service");
-//            isLocalService = true;
+        if (! (boundService instanceof TerminalService.LocalBinder)) {
         } else {
             libService_messenger
                 .addResponse(TerminalService.MSG_NO_REPLY)
-                .addResponse(TerminalService.MSG_REGISTERED_CLIENT, () -> {
+                .addResponse(TerminalService.MSG_REGISTERED_CLIENT, (message) -> {
                     libService_messenger.log.log_Info("registered");
                     libService_messenger.sendMessageToServerNonBlocking(
                         TerminalService.MSG_CALLBACK_INVOKED
                     );
                 })
-                .addResponse(TerminalService.MSG_UNREGISTERED_CLIENT, () -> {
+                .addResponse(TerminalService.MSG_UNREGISTERED_CLIENT, (message) -> {
                     libService_messenger.log.log_Info("unregistered");
                     libService_messenger.sendMessageToServerNonBlocking(
                         TerminalService.MSG_CALLBACK_INVOKED
                     );
                 })
-                .addResponse(TerminalService.MSG_UNREGISTERED_CLIENT, () -> {
+                .addResponse(TerminalService.MSG_UNREGISTERED_CLIENT, (message) -> {
                     libService_messenger.log.log_Info("SERVER IS ALIVE");
                     libService_messenger.sendMessageToServerNonBlocking(
                         TerminalService.MSG_CALLBACK_INVOKED
                     );
                 })
-                .addResponse(TerminalService.MSG_REGISTER_ACTIVITY_FAILED, () -> {
+                .addResponse(TerminalService.MSG_REGISTER_ACTIVITY_FAILED, (message) -> {
                     libService_messenger.sendMessageToServerNonBlocking(
                         TerminalService.MSG_CALLBACK_INVOKED
                     );
                 })
-                .addResponse(TerminalService.MSG_REGISTERED_ACTIVITY, () -> {
+                .addResponse(TerminalService.MSG_REGISTERED_ACTIVITY, (message) -> {
                     libService_messenger.sendMessageToServerNonBlocking(
                         TerminalService.MSG_CALLBACK_INVOKED
                     );
@@ -302,16 +297,6 @@ public class TerminalControllerService extends LibService_Service_Connection {
                 .addResponse(TerminalService.MSG_STARTED_TERMINAL_ACTIVITY)
                 .bind(boundService)
                 .start();
-            // We want to monitor the service for as long as we are
-            // connected to it.
-            logUtils.log_Info("registering");
-            libService_messenger.sendMessageToServer(TerminalService.MSG_REGISTER_CLIENT);
-            if (terminalController != null) {
-                if (terminalController.activity == null) {
-                    logUtils.log_Error("activity has not been started");
-                    return;
-                }
-            }
         }
         for (Runnable action : runnableArrayList) {
             action.run();

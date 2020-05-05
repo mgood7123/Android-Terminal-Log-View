@@ -49,6 +49,7 @@ import java.util.List;
 import androidx.core.app.NotificationCompat;
 
 import com.example.libclient_service.LibService_Service_Component;
+import com.example.libclient_service.RunnableArgument;
 
 import alpine.term.emulator.JNI;
 import alpine.term.emulator.TerminalSession;
@@ -199,21 +200,23 @@ public class TerminalService extends LibService_Service_Component implements Ses
     final TerminalService terminalService = this;
     TerminalControllerService terminalControllerService = null;
 
-    HandlerThread ht = new HandlerThread("threadName");
-    Looper looper;
-    Handler handler;
-    Handler.Callback callback = new Handler.Callback() {
+    @Override
+    public void onMessengerBindLocal() {
+        // do nothing
+    }
 
-        @SuppressWarnings("DuplicateBranchesInSwitch")
-        @Override
-        public boolean handleMessage(Message msg) {
-            logUtils.log_Info("SERVER: received message");
-            switch (msg.what) {
-                case MSG_REGISTER_CLIENT:
-                    mClients.add(msg.replyTo);
+    @Override
+    public void onMessengerBindRemote() {
+        terminalControllerService = (TerminalControllerService) manager;
+        messenger.defaultCallback = null;
+        messenger
+            .addResponse(MSG_REGISTER_CLIENT, new RunnableArgument<Message>() {
+                @Override
+                public void run(Message object) {
+                    mClients.add(object.replyTo);
                     logUtils.log_Info("SERVER: registered client");
                     logUtils.log_Info("SERVER: informing client of registration");
-                    sendMessage(msg, MSG_REGISTERED_CLIENT);
+                    sendMessage(object, MSG_REGISTERED_CLIENT);
                     new Thread() {
                         @Override
                         public void run() {
@@ -221,86 +224,72 @@ public class TerminalService extends LibService_Service_Component implements Ses
                             logUtils.log_Info("SERVER: informed client of registration");
                         }
                     }.start();
-                    break;
-                case MSG_UNREGISTER_CLIENT:
+                }
+            })
+            .addResponse(MSG_UNREGISTER_CLIENT, new RunnableArgument<Message>() {
+                @Override
+                public void run(Message object) {
                     logUtils.log_Info("SERVER: unregistering client");
-                    sendMessage(msg, MSG_UNREGISTERED_CLIENT);
+                    sendMessage(object, MSG_UNREGISTERED_CLIENT);
                     new Thread() {
                         @Override
                         public void run() {
                             waitForClientToReply();
-                            mClients.remove(msg.replyTo);
+                            mClients.remove(object.replyTo);
                             logUtils.log_Info("SERVER: unregistered client");
                         }
                     }.start();
-                    break;
-                case MSG_IS_SERVER_ALIVE:
+                }
+            })
+            .addResponse(MSG_IS_SERVER_ALIVE, new RunnableArgument<Message>() {
+                @Override
+                public void run(Message object) {
                     logUtils.log_Info("SERVER IS ALIVE");
-                    sendMessage(msg, MSG_IS_SERVER_ALIVE);
-                    break;
-                case MSG_REGISTER_ACTIVITY:
-                    Bundle bundle = msg.getData();
+                    sendMessage(object, MSG_IS_SERVER_ALIVE);
+                }
+            })
+            .addResponse(MSG_REGISTER_ACTIVITY, new RunnableArgument<Message>() {
+                @Override
+                public void run(Message object) {
+                    log.assertTrue(messenger.handlerThread.getState() != Thread.State.NEW);
+                    Bundle bundle = object.getData();
                     bundle.setClassLoader(getClass().getClassLoader());
                     TrackedActivity trackedActivity = bundle.getParcelable("ACTIVITY");
                     if (trackedActivity == null) {
                         logUtils.log_Info("SERVER: REGISTER ACTIVITY DID NOT RECEIVE AN ACTIVITY");
-                        sendMessage(msg, MSG_REGISTER_ACTIVITY_FAILED);
+                        sendMessage(object, MSG_REGISTER_ACTIVITY_FAILED);
                     } else {
                         logUtils.log_Info("SERVER: PID OF TRACKED ACTIVITY: " + trackedActivity.pid);
                         terminalService.mTrackedActivities.add(trackedActivity);
-                        if (terminalControllerService != null) {
-                            logUtils.log_Info("SERVER: terminalControllerService is not null");
-                            Context context = getApplicationContext();
-                            terminalControllerService.createLog(trackedActivity, false, context);
-                            terminalControllerService.createLogcat(trackedActivity, true, context);
-                        } else {
-                            logUtils.log_Info("SERVER: terminalControllerService is null");
-                        }
-                        sendMessage(msg, MSG_REGISTERED_ACTIVITY);
+                        logUtils.errorAndThrowIfNull(
+                            terminalControllerService,
+                            "SERVER: terminalControllerService is null"
+                        );
+                        Context context = getApplicationContext();
+                        terminalControllerService.createLog(trackedActivity, false, context);
+                        terminalControllerService.createLogcat(trackedActivity, true, context);
+                        sendMessage(object, MSG_REGISTERED_ACTIVITY);
                     }
-                    break;
-                case MSG_START_TERMINAL_ACTIVITY:
+                }
+            })
+            .addResponse(MSG_START_TERMINAL_ACTIVITY, new RunnableArgument<Message>() {
+                @Override
+                public void run(Message object) {
                     logUtils.log_Info("SERVER: starting terminal activity");
-                    sendMessage(msg, MSG_NO_REPLY);
+                    sendMessage(object, MSG_NO_REPLY);
                     Intent activity = new Intent(terminalService, TerminalActivity.class);
                     activity.addFlags(FLAG_ACTIVITY_NEW_TASK);
                     startActivity(activity);
-                    sendMessage(msg, MSG_STARTED_TERMINAL_ACTIVITY);
-                    break;
-                case MSG_CALLBACK_INVOKED:
-                    break;
-                default:
-                    break;
-            }
-            // handled messages are handled in background thread
-            // then notify about finished message.
-            synchronized (waitOnMe) {
-                waitOnMe.notifyAll();
-            }
-            return true;
-        }
-    };
-
-    /**
-     * Target we publish for clients to send messages to IncomingHandler.
-     */
-    Messenger mMessenger;
-
-    Messenger setMessenger() {
-        if (ht.getState() == Thread.State.NEW) {
-            ht.start();
-            looper = ht.getLooper();
-            handler = new Handler(looper, callback);
-            mMessenger = new Messenger(handler);
-            logUtils.log_Info("mMessenger set");
-        }
-        return mMessenger;
+                    sendMessage(object, MSG_STARTED_TERMINAL_ACTIVITY);
+                }
+            })
+        .addResponse(MSG_CALLBACK_INVOKED);
     }
 
     @SuppressLint({"Wakelock", "WakelockTimeout"})
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        setMessenger();
+//        messenger.start();
         String action = intent.getAction();
         if (INTENT_ACTION_SERVICE_STOP.equals(action)) {
             terminateService();
@@ -342,6 +331,12 @@ public class TerminalService extends LibService_Service_Component implements Ses
                             new ArrayList<>();
                         for (int i = mTrackedActivities.size() - 1; i >= 0; i--) {
                             TrackedActivity trackedActivity = mTrackedActivities.get(i);
+                            /*
+pidof: cus i use it to determine if the target process is still running or not
+Niklas Gürtler:moyai:  1 day ago
+    For that you should use the waitpid C function or the SIGCHLD signal or Process.waitFor
+     from Java. Waiting via pidof is bad (edited)
+                             */
                             if (JNI.hasDied(trackedActivity.packageName)) {
 
                                 // TODO: is this correct?

@@ -21,7 +21,7 @@ import java.util.ArrayList;
 
 public class LibService_Messenger {
 
-    public LibService_LogUtils log = new LibService_LogUtils("libService - libMessenger");
+    public LibService_LogUtils log = new LibService_LogUtils("LibService - libMessenger");
 
     /**
      * this object is used for synchronization
@@ -141,14 +141,26 @@ public class LibService_Messenger {
         }
     }
 
-    Messenger messengerToHandleMessages;
-    Messenger messengerToSendMessagesTo;
+    public Messenger messengerToHandleMessages;
+    public Messenger messengerToSendMessagesTo;
     final int DEFAULT_CODE = 9999;
 
-    HandlerThread handlerThread = new HandlerThread("libMessenger");
-    Looper looper;
-    Handler handler;
-    Handler.Callback callback = new Handler.Callback() {
+    public RunnableArgument<Message> defaultCallback = new RunnableArgument<Message>() {
+        @Override
+        public void run() {
+            sendMessageToServerNonBlocking(DEFAULT_CODE);
+        }
+
+        @Override
+        public void run(Message object) {
+            sendMessageToServerNonBlocking(DEFAULT_CODE);
+        }
+    };
+
+    public final HandlerThread handlerThread = new HandlerThread("libMessenger");
+    public Looper looper;
+    public Handler handler;
+    public final Handler.Callback callback = new Handler.Callback() {
         @SuppressWarnings("DuplicateBranchesInSwitch")
         @Override
         public boolean handleMessage(Message message) {
@@ -161,14 +173,14 @@ public class LibService_Messenger {
                     Response response = responses.get(i);
                     if (message.what == response.what) {
                         messageHandled = true;
-                        if (response.whatToExecute != null) response.whatToExecute.run();
+                        if (response.whatToExecute != null) response.whatToExecute.run(message);
                         break;
                     }
                 }
                 // TODO: handle unspecified response, by default we send and do not wait for a reply
                 if (!messageHandled) {
                     log.log_Warning("recieved an unknown response code: " + message.what);
-                    sendMessageToServerNonBlocking(DEFAULT_CODE);
+                    log.errorAndThrowIfNull(defaultCallback).run(message);
                 }
                 // handled messages are handled in background thread
                 // then notify about finished message.
@@ -182,7 +194,7 @@ public class LibService_Messenger {
 
     class Response {
         int what = 0;
-        Runnable whatToExecute = null;
+        RunnableArgument<Message> whatToExecute = null;
     }
 
     private ArrayList<Response> responses = new ArrayList<>();
@@ -207,7 +219,7 @@ server.defineResponseCodes(
         return this;
     }
 
-    public LibService_Messenger addResponse(int what, Runnable whatToExecute) {
+    public LibService_Messenger addResponse(int what, RunnableArgument<Message> whatToExecute) {
         Response response = new Response();
         response.what = what;
         response.whatToExecute = whatToExecute;
@@ -216,6 +228,7 @@ server.defineResponseCodes(
     }
 
     public LibService_Messenger bind (IBinder serviceContainingMessenger) {
+        log.errorAndThrowIfNull(serviceContainingMessenger);
         messengerToSendMessagesTo = new Messenger(serviceContainingMessenger);
         log.log_Info("binded to remote service");
         return this;

@@ -11,9 +11,9 @@ import java.util.ArrayList;
 
 /** this class defines a set of API's used for creating a Service that a Client can connect to */
 
-public class LibService_Service_Connection implements ServiceConnection {
+public abstract class LibService_Service_Connection implements ServiceConnection {
 
-    public LibService_LogUtils log = new LibService_LogUtils("libService - Service Connection");
+    public LibService_LogUtils log = new LibService_LogUtils("LibService - Service Connection");
 
     ArrayList<Class<? extends LibService_Service_Component>> components = new ArrayList<>();
 
@@ -27,7 +27,7 @@ public class LibService_Service_Connection implements ServiceConnection {
 
     public LibService_Service_Component service = null;
 
-    public void onServiceConnectedCallback() {}
+    public abstract void onServiceConnectedCallback();
 
     @Override
     public void onServiceConnected(ComponentName componentName, IBinder boundService) {
@@ -40,9 +40,11 @@ public class LibService_Service_Connection implements ServiceConnection {
             service.manager = this;
             log.log_Info("binded to local service");
             isLocalService = true;
+            log.errorAndThrowIfNull(service);
+            onServiceConnectedCallback();
+        } else {
+            log.errorAndThrowIfNull(service);
         }
-        log.errorAndThrowIfNull(service);
-        onServiceConnectedCallback();
     }
 
     /**

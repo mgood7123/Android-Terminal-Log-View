@@ -4,6 +4,6 @@ package com.example.libclient_service;
 
 public class LibService_Client {
 
-    private LibService_LogUtils log = new LibService_LogUtils("libService - Client ");
+    private LibService_LogUtils log = new LibService_LogUtils("LibService - Client ");
 
 }

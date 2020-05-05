@@ -72,22 +72,22 @@ public class TerminalClientAPI implements ServiceConnection {
         logUtils.logMethodName_Info();
         libService_messenger
             .addResponse(MSG_NO_REPLY)
-            .addResponse(MSG_REGISTERED_CLIENT, () -> {
+            .addResponse(MSG_REGISTERED_CLIENT, (message) -> {
                 libService_messenger.log.log_Info("registered");
                 libService_messenger.sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
             })
-            .addResponse(MSG_UNREGISTERED_CLIENT, () -> {
+            .addResponse(MSG_UNREGISTERED_CLIENT, (message) -> {
                 libService_messenger.log.log_Info("unregistered");
                 libService_messenger.sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
             })
-            .addResponse(MSG_UNREGISTERED_CLIENT, () -> {
+            .addResponse(MSG_UNREGISTERED_CLIENT, (message) -> {
                 libService_messenger.log.log_Info("SERVER IS ALIVE");
                 libService_messenger.sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
             })
-            .addResponse(MSG_REGISTER_ACTIVITY_FAILED, () -> {
+            .addResponse(MSG_REGISTER_ACTIVITY_FAILED, (message) -> {
                 libService_messenger.sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
             })
-            .addResponse(MSG_REGISTERED_ACTIVITY, () -> {
+            .addResponse(MSG_REGISTERED_ACTIVITY, (message) -> {
                 libService_messenger.sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
             })
             .addResponse(MSG_STARTED_TERMINAL_ACTIVITY)
