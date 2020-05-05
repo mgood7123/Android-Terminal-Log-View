@@ -16,11 +16,12 @@ import android.os.Message;
 import android.os.Messenger;
 import android.os.RemoteException;
 
+import com.example.libclient_service.LibService_Client;
 import com.example.libclient_service.LibService_Messenger;
 
 import java.util.ArrayList;
 
-public class TerminalClientAPI implements ServiceConnection {
+public class TerminalClientAPI extends LibService_Client {
 
     LogUtils logUtils = new LogUtils("Terminal Client Api");
 
@@ -65,11 +66,8 @@ public class TerminalClientAPI implements ServiceConnection {
 
     private ArrayList<Runnable> runnableArrayList = new ArrayList<>();
 
-    LibService_Messenger libService_messenger = new LibService_Messenger();
-
     @Override
-    public void onServiceConnected(ComponentName componentName, IBinder boundService) {
-        logUtils.logMethodName_Info();
+    public void onServiceConnectedCallback(IBinder boundService) {
         libService_messenger
             .addResponse(MSG_NO_REPLY)
             .addResponse(MSG_REGISTERED_CLIENT, (message) -> {
@@ -105,27 +103,13 @@ public class TerminalClientAPI implements ServiceConnection {
         runnableArrayList.clear();
     }
 
-    @Override
-    public void onServiceDisconnected(ComponentName name) {
-        logUtils.logMethodName_Info();
-    }
-
     public void runWhenConnectedToService(Runnable runnable) {
         runnableArrayList.add(runnable);
     }
 
-    public void bindToTerminalService(Activity activity) {
-        Intent serviceIntent = new Intent();
-        serviceIntent.setClassName("alpine.term", "alpine.term.TerminalService");
-        serviceIntent.setPackage("alpine.term");
-
-        // Establish a connection with the service.  We use an explicit
-        // class name because there is no reason to be able to let other
-        // applications replace our component.
-        if (!activity.bindService(serviceIntent, this, 0)) {
-            throw new RuntimeException("bindService() failed");
-        }
-        mIsBound = true;
+    public void connectToService(Activity activity) {
+        connectToService(activity, "alpine.term", "alpine.term.TerminalService");
+        registerActivity(activity, createPseudoTerminal());
     }
 
     public void registerActivity(final Activity activity, final int[] pseudoTerminal) {
@@ -170,10 +154,5 @@ public class TerminalClientAPI implements ServiceConnection {
 
     public void startTerminalActivity() {
         libService_messenger.sendMessageToServer(MSG_START_TERMINAL_ACTIVITY);
-    }
-
-    public void connectToService(Activity activity) {
-        bindToTerminalService(activity);
-        registerActivity(activity, createPseudoTerminal());
     }
 }
