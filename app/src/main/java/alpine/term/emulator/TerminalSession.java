@@ -40,6 +40,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import alpine.term.Config;
 import alpine.term.LogUtils;
@@ -202,22 +203,49 @@ public final class TerminalSession extends TerminalOutput {
         return (mEmulator == null) ? null : mEmulator.getTitle();
     }
 
-    void start_STDIN_writer(FileDescriptor terminalFileDescriptorWrapped) {
-        final byte[] buffer = new byte[4096];
-        try (FileOutputStream termOut = new FileOutputStream(terminalFileDescriptorWrapped)) {
-            while (true) {
-                int bytesToWrite = mTerminalToProcessIOQueue.read(buffer, true);
-                if (bytesToWrite == -1) {
-                    logUtils.log_Error("stdin writer return -1");
-                    return;
+    AtomicBoolean TermSessionInputReader___shell__running = new AtomicBoolean(false);
+    AtomicBoolean TermSessionOutputWriter__shell__running = new AtomicBoolean(false);
+    AtomicBoolean TermSessionInputReader___logcat_running = new AtomicBoolean(false);
+    AtomicBoolean logcat_restarter_running = new AtomicBoolean(false);
+    AtomicBoolean TermSessionInputReader___log____running = new AtomicBoolean(false);
+    public AtomicBoolean sessionIsAlive = new AtomicBoolean(true);
+
+    public void waitForExit() {
+        if (TermSessionInputReader___shell__running.get() || TermSessionOutputWriter__shell__running.get()) {
+            JNI.puts("waiting for shell to stop...");
+            boolean stopped = false;
+            while (!stopped)
+                if (
+                    !TermSessionInputReader___shell__running.get() &&
+                    !TermSessionOutputWriter__shell__running.get()
+                ) {
+                    JNI.puts("shell has stopped");
+                    stopped = true;
                 }
-                termOut.write(buffer, 0, bytesToWrite);
-            }
-        } catch (IOException e) {
-            // Ignore.
+        }
+        if (TermSessionInputReader___logcat_running.get() || logcat_restarter_running.get()) {
+            JNI.puts("waiting for logcat to stop...");
+            boolean stopped = false;
+            while (!stopped)
+                if (
+                    !TermSessionInputReader___logcat_running.get() &&
+                    !logcat_restarter_running.get()
+                ) {
+                    JNI.puts("logcat has stopped");
+                    stopped = true;
+                }
+        }
+        if (TermSessionInputReader___log____running.get()) {
+            JNI.puts("waiting for log to stop...");
+            boolean stopped = false;
+            while (!stopped)
+                if (!TermSessionInputReader___log____running.get()) {
+                    JNI.puts("log has stopped");
+                    stopped = true;
+                }
         }
     }
-    
+
     public void createShellSession(int columns, int rows) {
         logUtils.log_Info("creating shell");
         logUtils.errorAndThrowIfNull(mArgs);
@@ -233,22 +261,29 @@ public final class TerminalSession extends TerminalOutput {
         new Thread("TermSessionInputReader (stdout/stderr) [pid=" + mShellPid + "]") {
             @Override
             public void run() {
-                try (InputStream termIn = new FileInputStream(terminalFileDescriptorWrapped)) {
+                try (FileInputStream termIn = new FileInputStream(terminalFileDescriptorWrapped)) {
                     final byte[] buffer = new byte[4096];
-                    while (true) {
-                        int read = termIn.read(buffer);
-                        if (read == -1) {
-                            logUtils.log_Error("stdout/stderr reader return -1");
-                            return;
+                    TermSessionInputReader___shell__running.set(true);
+                    while (sessionIsAlive.get()) {
+                        if (termIn.available() != 0) {
+                            int read = termIn.read(buffer);
+                            if (read == -1) {
+                                logUtils.log_Error("stdout/stderr reader return -1");
+                                TermSessionInputReader___shell__running.set(false);
+                                return;
+                            }
+                            if (!mProcessToTerminalIOQueue.write(buffer, 0, read)) {
+                                logUtils.log_Error("stdout/stderr reader [write] returned false (closed)");
+                                TermSessionInputReader___shell__running.set(false);
+                                return;
+                            }
+                            mMainThreadHandler.sendEmptyMessage(MSG_NEW_INPUT);
                         }
-                        if (!mProcessToTerminalIOQueue.write(buffer, 0, read)) {
-                            logUtils.log_Error("stdout/stderr reader [write] returned false (closed)");
-                            return;
-                        }
-                        mMainThreadHandler.sendEmptyMessage(MSG_NEW_INPUT);
                     }
+                    TermSessionInputReader___shell__running.set(false);
                 } catch (Exception e) {
                     // Ignore, just shutting down.
+                    TermSessionInputReader___shell__running.set(false);
                 }
             }
         }.start();
@@ -256,7 +291,23 @@ public final class TerminalSession extends TerminalOutput {
         new Thread("TermSessionOutputWriter (stdin) [pid=" + mShellPid + "]") {
             @Override
             public void run() {
-                start_STDIN_writer(terminalFileDescriptorWrapped);
+                final byte[] buffer = new byte[4096];
+                try (FileOutputStream termOut = new FileOutputStream(terminalFileDescriptorWrapped)) {
+                    TermSessionOutputWriter__shell__running.set(true);
+                    while (sessionIsAlive.get()) {
+                        int bytesToWrite = mTerminalToProcessIOQueue.read(buffer, true);
+                        if (bytesToWrite == -1) {
+                            logUtils.log_Error("stdin writer return -1");
+                            TermSessionOutputWriter__shell__running.set(false);
+                            return;
+                        }
+                        termOut.write(buffer, 0, bytesToWrite);
+                    }
+                    TermSessionOutputWriter__shell__running.set(false);
+                } catch (IOException e) {
+                    // Ignore.
+                    TermSessionOutputWriter__shell__running.set(false);
+                }
             }
         }.start();
     }
@@ -285,7 +336,7 @@ public final class TerminalSession extends TerminalOutput {
         new Thread("TermSessionInputReader (stdout/stderr) [log (pid=" + mShellPid + ")]") {
             @Override
             public void run() {
-                try (InputStream termIn = new FileInputStream(terminalFileDescriptorWrapped)) {
+                try (FileInputStream termIn = new FileInputStream(terminalFileDescriptorWrapped)) {
                     final byte[] buffer = new byte[4096];
                     File log = new File(Config.getDataDirectory(context) + "/native_log.txt");
                     if (!log.exists()) log.createNewFile();
@@ -293,22 +344,28 @@ public final class TerminalSession extends TerminalOutput {
                     if (!log.canWrite()) log.setWritable(true);
                     FileOutputStream logFile = new FileOutputStream(log);
                     FileDescriptor logFileFileDescriptor = logFile.getFD();
-                    while (true) {
-                        int read = termIn.read(buffer);
-                        if (read == -1) {
-                            logUtils.log_Error("stdout/stderr reader return -1");
-                            return;
+                    while (sessionIsAlive.get()) {
+                        if (termIn.available() != 0) {
+                            int read = termIn.read(buffer);
+                            if (read == -1) {
+                                logUtils.log_Error("stdout/stderr reader return -1");
+                                TermSessionInputReader___log____running.set(false);
+                                return;
+                            }
+                            logFile.write(buffer, 0, read);
+                            logFileFileDescriptor.sync();
+                            if (!mProcessToTerminalIOQueue.write(buffer, 0, read)) {
+                                logUtils.log_Error("stdout/stderr reader [write] returned false (closed)");
+                                TermSessionInputReader___log____running.set(false);
+                                return;
+                            }
+                            mMainThreadHandler.sendEmptyMessage(MSG_NEW_INPUT);
                         }
-                        logFile.write(buffer, 0, read);
-                        logFileFileDescriptor.sync();
-                        if (!mProcessToTerminalIOQueue.write(buffer, 0, read)) {
-                            logUtils.log_Error("stdout/stderr reader [write] returned false (closed)");
-                            return;
-                        }
-                        mMainThreadHandler.sendEmptyMessage(MSG_NEW_INPUT);
                     }
+                    TermSessionInputReader___log____running.set(false);
                 } catch (Exception e) {
                     // Ignore, just shutting down.
+                    TermSessionInputReader___log____running.set(false);
                 }
             }
         }.start();
@@ -331,7 +388,7 @@ public final class TerminalSession extends TerminalOutput {
         new Thread("TermSessionInputReader (stdout/stderr) [Logcat (pid=" + mShellPid + ")]") {
             @Override
             public void run() {
-                try (InputStream termIn = new FileInputStream(terminalFileDescriptorWrapped)) {
+                try (FileInputStream termIn = new FileInputStream(terminalFileDescriptorWrapped)) {
                     final byte[] buffer = new byte[4096];
                     File log = new File(Config.getDataDirectory(context) + "/logcat.txt");
                     if (!log.exists()) log.createNewFile();
@@ -339,22 +396,29 @@ public final class TerminalSession extends TerminalOutput {
                     if (!log.canWrite()) log.setWritable(true);
                     FileOutputStream logFile = new FileOutputStream(log);
                     FileDescriptor logFileFileDescriptor = logFile.getFD();
-                    while (true) {
-                        int read = termIn.read(buffer);
-                        if (read == -1) {
-                            logUtils.log_Error("stdout/stderr reader return -1");
-                            return;
+                    TermSessionInputReader___logcat_running.set(true);
+                    while (sessionIsAlive.get()) {
+                        if (termIn.available() != 0) {
+                            int read = termIn.read(buffer);
+                            if (read == -1) {
+                                logUtils.log_Error("stdout/stderr reader return -1");
+                                TermSessionInputReader___logcat_running.set(false);
+                                return;
+                            }
+                            logFile.write(buffer, 0, read);
+                            logFileFileDescriptor.sync();
+                            if (!mProcessToTerminalIOQueue.write(buffer, 0, read)) {
+                                logUtils.log_Error("stdout/stderr reader [write] returned false (closed)");
+                                TermSessionInputReader___logcat_running.set(false);
+                                return;
+                            }
+                            mMainThreadHandler.sendEmptyMessage(MSG_NEW_INPUT);
                         }
-                        logFile.write(buffer, 0, read);
-                        logFileFileDescriptor.sync();
-                        if (!mProcessToTerminalIOQueue.write(buffer, 0, read)) {
-                            logUtils.log_Error("stdout/stderr reader [write] returned false (closed)");
-                            return;
-                        }
-                        mMainThreadHandler.sendEmptyMessage(MSG_NEW_INPUT);
                     }
+                    TermSessionInputReader___logcat_running.set(false);
                 } catch (Exception e) {
                     // Ignore, just shutting down.
+                    TermSessionInputReader___logcat_running.set(false);
                 }
             }
         }.start();
@@ -385,12 +449,16 @@ public final class TerminalSession extends TerminalOutput {
                 new Thread("TermSession[pid=" + mShellPid + "]") {
                     @Override
                     public void run() {
-                        while (true) {
+                        logcat_restarter_running.set(true);
+                        while (sessionIsAlive.get()) {
                             int processExitCode = JNI.waitFor(mShellPid);
                             mEmulator.appendLine("Logcat returned " + processExitCode);
-                            mEmulator.appendLine("restarting...");
-                            createLogcatSession(columns, rows, context);
+                            if (sessionIsAlive.get()) {
+                                mEmulator.appendLine("restarting...");
+                                createLogcatSession(columns, rows, context);
+                            }
                         }
+                        logcat_restarter_running.set(false);
                     }
                 }.start();
             } else {

@@ -357,6 +357,8 @@ Niklas Gürtler:moyai:  1 day ago
                             for (TerminalSession terminal : terminals) {
                                 // close the master half of a pseudo-terminal pair of this terminal
                                 JNI.close(terminal.mTerminalFileDescriptor);
+                                terminal.sessionIsAlive.set(false);
+                                terminal.waitForExit();
                                 removeSession(terminal);
                             }
                             terminalControllerService.terminalController.activity.runOnUiThread(

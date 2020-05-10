@@ -274,8 +274,10 @@ JNIEXPORT int JNICALL Java_alpine_term_emulator_JNI_waitFor(JNIEnv* ALPINE_TERM_
     int r = waitpid(pid, &status, 0);
     int errno_ = errno;
     const char * errnoString = strerror(errno);
-    printf("waitpid returned %d, errno: %d, errno string: %s\n", r, errno_, errnoString);
-    LOGE("waitpid returned %d, errno: %d, errno string: %s\n", r, errno_, errnoString);
+    if (errno_ != 0) {
+        printf("waitpid returned %d, errno: %d, errno string: %s\n", r, errno_, errnoString);
+        LOGE("waitpid returned %d, errno: %d, errno string: %s\n", r, errno_, errnoString);
+    }
     if (r != -1) {
         if (WIFEXITED(status)) {
             return WEXITSTATUS(status);
