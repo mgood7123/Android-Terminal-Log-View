@@ -48,93 +48,113 @@ public class LibService_Messenger {
     }
 
     public boolean sendMessageToServer(int what) {
-        return sendMessageToServer(null, what, 0, 0, null, null);
+        return sendMessageToServer(null, null, what, 0, 0, null, null);
     }
 
     private boolean sendMessageToServer(int what, int arg1) {
-        return sendMessageToServer(null, what, arg1, 0, null, null);
+        return sendMessageToServer(null, null, what, arg1, 0, null, null);
     }
 
     private boolean sendMessageToServer(int what, int arg1, int arg2) {
-        return sendMessageToServer(null, what, arg1, arg2, null, null);
+        return sendMessageToServer(null, null, what, arg1, arg2, null, null);
     }
 
     public boolean sendMessageToServer(int what, Object obj) {
-        return sendMessageToServer(null, what, 0, 0, obj, null);
+        return sendMessageToServer(null, null, what, 0, 0, obj, null);
     }
 
     private boolean sendMessageToServer(int what, int arg1, Object obj) {
-        return sendMessageToServer(null, what, arg1, 0, obj, null);
+        return sendMessageToServer(null, null, what, arg1, 0, obj, null);
     }
 
     private boolean sendMessageToServer(int what, int arg1, int arg2, Object obj) {
-        return sendMessageToServer(null, what, arg1, arg2, obj, null);
+        return sendMessageToServer(null, null, what, arg1, arg2, obj, null);
     }
 
     public boolean sendMessageToServer(int what, Bundle bundle) {
-        return sendMessageToServer(null, what, 0, 0, null, bundle);
+        return sendMessageToServer(null, null, what, 0, 0, null, bundle);
     }
 
     private boolean sendMessageToServer(int what, int arg1, Bundle bundle) {
-        return sendMessageToServer(null, what, arg1, 0, null, bundle);
+        return sendMessageToServer(null, null, what, arg1, 0, null, bundle);
     }
 
     private boolean sendMessageToServer(int what, int arg1, int arg2, Bundle bundle) {
-        return sendMessageToServer(null, what, arg1, arg2, null, bundle);
+        return sendMessageToServer(null, null, what, arg1, arg2, null, bundle);
     }
 
     public boolean sendMessageToServer(int what, Object obj, Bundle bundle) {
-        return sendMessageToServer(null, what, 0, 0, obj, bundle);
+        return sendMessageToServer(null, null, what, 0, 0, obj, bundle);
     }
 
     private boolean sendMessageToServer(int what, int arg1, Object obj, Bundle bundle) {
-        return sendMessageToServer(null, what, arg1, 0, obj, bundle);
+        return sendMessageToServer(null, null, what, arg1, 0, obj, bundle);
     }
 
     private boolean sendMessageToServer(int what, int arg1, int arg2, Object obj, Bundle bundle) {
-        return sendMessageToServer(null, what, arg1, arg2, obj, bundle);
+        return sendMessageToServer(null, null, what, arg1, arg2, obj, bundle);
     }
 
-    private static final int messageType_Message = 9997;
-    private static final String messageType_Message_Bundle_Parcelable_Key = "Message";
-    private static final int messageType_Notification = 9998;
-
-    public boolean sendMessageToServer(Handler handler, int what, int arg1, int arg2, Object obj, Bundle bundle) {
-        try {
-            Message msg = Message.obtain(handler, what, arg1, arg2, obj);
-            if (bundle != null) msg.setData(bundle);
-            msg.replyTo = messengerToHandleMessages;
-
-            Message msgServer = Message.obtain(handler, messageType_Message);
-            Bundle bund = new Bundle();
-            bund.putParcelable(messageType_Message_Bundle_Parcelable_Key, msg);
-            msgServer.setData(bund);
-
-            messengerToSendMessagesTo.send(msgServer);
-            waitForReply();
-            return true;
-        } catch (RemoteException e) {
-            // In this case the service has crashed before we could even
-            // do anything with it
-            return false;
-        }
+    public boolean sendMessageToServer(Message msg, int what) {
+        return sendMessageToServer(msg, null, what, 0, 0, null, null);
     }
 
-    public boolean sendNotificationToServer() {
-        try {
-            Message msg = Message.obtain(handler, messageType_Notification);
-            messengerToSendMessagesTo.send(msg);
-            return true;
-        } catch (RemoteException e) {
-            // In this case the service has crashed before we could even
-            // do anything with it
-            return false;
-        }
+    private boolean sendMessageToServer(Message msg, int what, int arg1) {
+        return sendMessageToServer(msg, null, what, arg1, 0, null, null);
+    }
+
+    private boolean sendMessageToServer(Message msg, int what, int arg1, int arg2) {
+        return sendMessageToServer(msg, null, what, arg1, arg2, null, null);
+    }
+
+    public boolean sendMessageToServer(Message msg, int what, Object obj) {
+        return sendMessageToServer(msg, null, what, 0, 0, obj, null);
+    }
+
+    private boolean sendMessageToServer(Message msg, int what, int arg1, Object obj) {
+        return sendMessageToServer(msg, null, what, arg1, 0, obj, null);
+    }
+
+    private boolean sendMessageToServer(Message msg, int what, int arg1, int arg2, Object obj) {
+        return sendMessageToServer(msg, null, what, arg1, arg2, obj, null);
+    }
+
+    public boolean sendMessageToServer(Message msg, int what, Bundle bundle) {
+        return sendMessageToServer(msg, null, what, 0, 0, null, bundle);
+    }
+
+    private boolean sendMessageToServer(Message msg, int what, int arg1, Bundle bundle) {
+        return sendMessageToServer(msg, null, what, arg1, 0, null, bundle);
+    }
+
+    private boolean sendMessageToServer(Message msg, int what, int arg1, int arg2, Bundle bundle) {
+        return sendMessageToServer(msg, null, what, arg1, arg2, null, bundle);
+    }
+
+    public boolean sendMessageToServer(Message msg, int what, Object obj, Bundle bundle) {
+        return sendMessageToServer(msg, null, what, 0, 0, obj, bundle);
+    }
+
+    private boolean sendMessageToServer(Message msg, int what, int arg1, Object obj, Bundle bundle) {
+        return sendMessageToServer(msg, null, what, arg1, 0, obj, bundle);
+    }
+
+    private boolean sendMessageToServer(Message msg, int what, int arg1, int arg2, Object obj, Bundle bundle) {
+        return sendMessageToServer(msg, null, what, arg1, arg2, obj, bundle);
     }
 
     public Messenger messengerToHandleMessages;
     public Messenger messengerToSendMessagesTo;
     final int DEFAULT_CODE = 9999;
+
+    public void Notify() {
+        // handled messages are handled in background thread
+        // then notify about finished message.
+        synchronized (waitOnMe) {
+            waitOnMe.notifyAll();
+        }
+    }
+
     // DESIGN V1
     // each function runs in the main processing thread
     // each function is a RunnableArgument
@@ -181,23 +201,41 @@ public class LibService_Messenger {
     //              the server of a command completion without blocking the main processing
     //              thread
 
-    public RunnableArgument<Message> defaultCallback = new RunnableArgument<Message>() {
-        @Override
-        public void run() {
-            sendNotificationToServer();
-        }
+    private static final int messageType_Message = 9997;
+    private static final String messageType_Message_Bundle_Parcelable_Key = "Message";
+    private static final int messageType_Notification = 9998;
 
-        @Override
-        public void run(Message object) {
-            sendNotificationToServer();
-        }
-    };
+    public boolean sendMessageToServer(Message message, Handler handler, int what, int arg1, int arg2, Object obj, Bundle bundle) {
+        try {
+            Message msg = Message.obtain(handler, what, arg1, arg2, obj);
+            if (bundle != null) msg.setData(bundle);
+            msg.replyTo = messengerToHandleMessages;
 
-    public void Notify() {
-        // handled messages are handled in background thread
-        // then notify about finished message.
-        synchronized (waitOnMe) {
-            waitOnMe.notifyAll();
+            Message msgServer = Message.obtain(handler, messageType_Message);
+            Bundle bund = new Bundle();
+            bund.putParcelable(messageType_Message_Bundle_Parcelable_Key, msg);
+            msgServer.setData(bund);
+
+            if (message != null) message.replyTo.send(msgServer);
+            else messengerToSendMessagesTo.send(msgServer);
+            waitForReply();
+            return true;
+        } catch (RemoteException e) {
+            // In this case the service has crashed before we could even
+            // do anything with it
+            return false;
+        }
+    }
+
+    public boolean sendNotificationToServer(Message message) {
+        try {
+            Message msg = Message.obtain(handler, messageType_Notification);
+            message.replyTo.send(msg);
+            return true;
+        } catch (RemoteException e) {
+            // In this case the service has crashed before we could even
+            // do anything with it
+            return false;
         }
     }
 
@@ -251,20 +289,10 @@ public class LibService_Messenger {
                         public void run() {
                             super.run();
                             Looper.prepare();
-                            Messenger origin = messengerToSendMessagesTo;
-                            boolean originIsNull = origin == null;
-
-                            if (originIsNull) {
-                                messengerToSendMessagesTo = msg.replyTo;
-                                log.errorAndThrowIfNull(messengerToSendMessagesTo, msg.replyTo);
-                            }
-
                             HandleMain(msg);
                             log.log_Info("sending notification");
-                            sendNotificationToServer();
+                            sendNotificationToServer(msg);
                             log.log_Info("sent Notification");
-
-                            if (originIsNull) messengerToSendMessagesTo = origin;
                             Looper.loop();
                         }
                     }.start();

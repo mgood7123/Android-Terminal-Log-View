@@ -210,31 +210,30 @@ public class TerminalService extends LibService_Service_Component implements Ses
 
     @Override
     public void onMessengerBindRemote() {
-        messenger.defaultCallback = null;
         messenger
             .addResponse(LibService_Messenger.PING, message -> {
                 log.log_Info("sending pong");
-                messenger.sendMessageToServer(LibService_Messenger.PONG);
+                messenger.sendMessageToServer(message, LibService_Messenger.PONG);
                 log.log_Info("sent pong");
             })
             .addResponse(MSG_REGISTER_CLIENT, (message) -> {
                 mClients.add(message.replyTo);
                 logUtils.log_Info("SERVER: registered client");
                 logUtils.log_Info("SERVER: informing client of registration");
-                messenger.sendMessageToServer(MSG_REGISTERED_CLIENT);
+                messenger.sendMessageToServer(message, MSG_REGISTERED_CLIENT);
             })
             .addResponse(MSG_REGISTRATION_CONFIRMED, (message) -> {
                 logUtils.log_Info("SERVER: informed client of registration");
             })
             .addResponse(MSG_UNREGISTER_CLIENT, (message) -> {
                 logUtils.log_Info("SERVER: unregistering client");
-                messenger.sendMessageToServer(MSG_UNREGISTERED_CLIENT);
+                messenger.sendMessageToServer(message, MSG_UNREGISTERED_CLIENT);
                 mClients.remove(message.replyTo);
                 logUtils.log_Info("SERVER: unregistered client");
             })
             .addResponse(MSG_IS_SERVER_ALIVE, (message) -> {
                 logUtils.log_Info("SERVER IS ALIVE");
-                messenger.sendMessageToServer(MSG_IS_SERVER_ALIVE);
+                messenger.sendMessageToServer(message, MSG_IS_SERVER_ALIVE);
             })
             .addResponse(MSG_REGISTER_ACTIVITY, (message) -> {
                 log.assertTrue(messenger.handlerThread.getState() != Thread.State.NEW);
@@ -243,9 +242,7 @@ public class TerminalService extends LibService_Service_Component implements Ses
                 TrackedActivity trackedActivity = bundle.getParcelable("ACTIVITY");
                 if (trackedActivity == null) {
                     logUtils.log_Info("SERVER: REGISTER ACTIVITY DID NOT RECEIVE AN ACTIVITY");
-                    log.errorAndThrowIfNull(messenger.messengerToSendMessagesTo);
-                    log.errorAndThrowIfNull(message.replyTo);
-                    sendMessage(message, MSG_REGISTER_ACTIVITY_FAILED);
+                    messenger.sendMessageToServer(message, MSG_REGISTER_ACTIVITY_FAILED);
                 } else {
                     logUtils.log_Info("SERVER: PID OF TRACKED ACTIVITY: " + trackedActivity.pid);
                     terminalService.mTrackedActivities.add(trackedActivity);
@@ -256,9 +253,7 @@ public class TerminalService extends LibService_Service_Component implements Ses
                     Context context = getApplicationContext();
                     terminalControllerService.createLog(trackedActivity, false, context);
                     terminalControllerService.createLogcat(trackedActivity, true, context);
-                    log.errorAndThrowIfNull(messenger.messengerToSendMessagesTo);
-                    log.errorAndThrowIfNull(message.replyTo);
-                    messenger.sendMessageToServer(MSG_REGISTERED_ACTIVITY);
+                    messenger.sendMessageToServer(message, MSG_REGISTERED_ACTIVITY);
                 }
             })
             .addResponse(MSG_START_TERMINAL_ACTIVITY, (message) -> {
@@ -266,7 +261,7 @@ public class TerminalService extends LibService_Service_Component implements Ses
                 Intent activity = new Intent(terminalService, TerminalActivity.class);
                 activity.addFlags(FLAG_ACTIVITY_NEW_TASK);
                 startActivity(activity);
-                messenger.sendMessageToServer(MSG_STARTED_TERMINAL_ACTIVITY);
+                messenger.sendMessageToServer(message, MSG_STARTED_TERMINAL_ACTIVITY);
             })
         .addResponse(MSG_CALLBACK_INVOKED, (message) -> {
             logUtils.log_Info("INVOKED CALLBACK");

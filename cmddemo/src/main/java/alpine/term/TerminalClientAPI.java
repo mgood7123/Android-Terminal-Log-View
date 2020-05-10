@@ -78,7 +78,7 @@ public class TerminalClientAPI extends LibService_Client {
             .addResponse(MSG_NO_REPLY)
             .addResponse(MSG_REGISTERED_CLIENT, (message) -> {
                 messenger.log.log_Info("registered");
-                messenger.sendMessageToServer(MSG_REGISTRATION_CONFIRMED);
+                messenger.sendMessageToServer(message, MSG_REGISTRATION_CONFIRMED);
                 messenger.log.log_Info("sent message to server");
             })
             .addResponse(MSG_UNREGISTERED_CLIENT, (message) -> {
@@ -101,7 +101,6 @@ public class TerminalClientAPI extends LibService_Client {
 
         // We want to monitor the service for as long as we are
         // connected to it.
-        messenger.ping();
         logUtils.log_Info("registering");
         messenger.sendMessageToServer(MSG_REGISTER_CLIENT);
 
