@@ -72,6 +72,11 @@ public class TerminalControllerService extends LibService_Service_Connection {
                     terminalController.activity.runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
+                            if (!LibService_Messenger.mainThread.equals(Thread.currentThread())) {
+                                logUtils.errorAndThrow(
+                                    "ERROR: runOnUiThread IS NOT BEING INVOKED ON REAL UI THREAD"
+                                );
+                            }
                             terminalController.mTerminalView.onScreenUpdated();
                         }
                     });
@@ -90,6 +95,11 @@ public class TerminalControllerService extends LibService_Service_Connection {
                 terminalController.activity.runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
+                        if (!LibService_Messenger.mainThread.equals(Thread.currentThread())) {
+                            logUtils.errorAndThrow(
+                                "ERROR: runOnUiThread IS NOT BEING INVOKED ON REAL UI THREAD"
+                            );
+                        }
                         mListViewAdapter.notifyDataSetChanged();
                     }
                 });
@@ -304,6 +314,11 @@ public class TerminalControllerService extends LibService_Service_Connection {
         terminalController.activity.runOnUiThread(new Runnable() {
             @Override
             public void run() {
+                if (!LibService_Messenger.mainThread.equals(Thread.currentThread())) {
+                    logUtils.errorAndThrow(
+                        "ERROR: runOnUiThread IS NOT BEING INVOKED ON REAL UI THREAD"
+                    );
+                }
                 terminalController.switchToSession(currentSession, session);
                 mListViewAdapter.notifyDataSetChanged();
             }
@@ -346,6 +361,11 @@ public class TerminalControllerService extends LibService_Service_Connection {
         terminalController.activity.runOnUiThread(new Runnable() {
             @Override
             public void run() {
+                if (!LibService_Messenger.mainThread.equals(Thread.currentThread())) {
+                    logUtils.errorAndThrow(
+                        "ERROR: runOnUiThread IS NOT BEING INVOKED ON REAL UI THREAD"
+                    );
+                }
                 terminalController.switchToSession(currentSession, session);
                 mListViewAdapter.notifyDataSetChanged();
             }
@@ -377,6 +397,11 @@ public class TerminalControllerService extends LibService_Service_Connection {
         terminalController.activity.runOnUiThread(new Runnable() {
             @Override
             public void run() {
+                if (!LibService_Messenger.mainThread.equals(Thread.currentThread())) {
+                    logUtils.errorAndThrow(
+                        "ERROR: runOnUiThread IS NOT BEING INVOKED ON REAL UI THREAD"
+                    );
+                }
                 terminalController.switchToSession(currentSession, session);
                 mListViewAdapter.notifyDataSetChanged();
             }

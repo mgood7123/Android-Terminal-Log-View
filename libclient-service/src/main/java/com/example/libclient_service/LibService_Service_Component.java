@@ -43,7 +43,8 @@ public abstract class LibService_Service_Component extends Service {
             }
         }
         onMessengerBindRemote();
-        return messenger.start().getBinder();
+        messenger.start();
+        return messenger.getBinder();
     }
 
     @Override

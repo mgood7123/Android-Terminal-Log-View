@@ -8,7 +8,7 @@ import android.os.IBinder;
 
 public abstract class LibService_Client {
 
-    private LibService_LogUtils log = new LibService_LogUtils("LibService - Client ");
+    public LibService_LogUtils log = new LibService_LogUtils("LibService - Client ");
 
     public final LibService_Messenger messenger = new LibService_Messenger("Client");
 

@@ -48,6 +48,7 @@ import java.util.List;
 
 import androidx.core.app.NotificationCompat;
 
+import com.example.libclient_service.LibService_Messenger;
 import com.example.libclient_service.LibService_Service_Component;
 import com.example.libclient_service.RunnableArgument;
 
@@ -211,30 +212,29 @@ public class TerminalService extends LibService_Service_Component implements Ses
     public void onMessengerBindRemote() {
         messenger.defaultCallback = null;
         messenger
+            .addResponse(LibService_Messenger.PING, message -> {
+                log.log_Info("sending pong");
+                messenger.sendMessageToServer(LibService_Messenger.PONG);
+                log.log_Info("sent pong");
+            })
             .addResponse(MSG_REGISTER_CLIENT, (message) -> {
                 mClients.add(message.replyTo);
                 logUtils.log_Info("SERVER: registered client");
                 logUtils.log_Info("SERVER: informing client of registration");
-                sendMessage(message, MSG_REGISTERED_CLIENT);
+                messenger.sendMessageToServer(MSG_REGISTERED_CLIENT);
             })
             .addResponse(MSG_REGISTRATION_CONFIRMED, (message) -> {
                 logUtils.log_Info("SERVER: informed client of registration");
             })
             .addResponse(MSG_UNREGISTER_CLIENT, (message) -> {
                 logUtils.log_Info("SERVER: unregistering client");
-                sendMessage(message, MSG_UNREGISTERED_CLIENT);
-                new Thread() {
-                    @Override
-                    public void run() {
-                        waitForClientToReply();
-                        mClients.remove(message.replyTo);
-                        logUtils.log_Info("SERVER: unregistered client");
-                    }
-                }.start();
+                messenger.sendMessageToServer(MSG_UNREGISTERED_CLIENT);
+                mClients.remove(message.replyTo);
+                logUtils.log_Info("SERVER: unregistered client");
             })
             .addResponse(MSG_IS_SERVER_ALIVE, (message) -> {
                 logUtils.log_Info("SERVER IS ALIVE");
-                sendMessage(message, MSG_IS_SERVER_ALIVE);
+                messenger.sendMessageToServer(MSG_IS_SERVER_ALIVE);
             })
             .addResponse(MSG_REGISTER_ACTIVITY, (message) -> {
                 log.assertTrue(messenger.handlerThread.getState() != Thread.State.NEW);
@@ -243,6 +243,8 @@ public class TerminalService extends LibService_Service_Component implements Ses
                 TrackedActivity trackedActivity = bundle.getParcelable("ACTIVITY");
                 if (trackedActivity == null) {
                     logUtils.log_Info("SERVER: REGISTER ACTIVITY DID NOT RECEIVE AN ACTIVITY");
+                    log.errorAndThrowIfNull(messenger.messengerToSendMessagesTo);
+                    log.errorAndThrowIfNull(message.replyTo);
                     sendMessage(message, MSG_REGISTER_ACTIVITY_FAILED);
                 } else {
                     logUtils.log_Info("SERVER: PID OF TRACKED ACTIVITY: " + trackedActivity.pid);
@@ -254,16 +256,17 @@ public class TerminalService extends LibService_Service_Component implements Ses
                     Context context = getApplicationContext();
                     terminalControllerService.createLog(trackedActivity, false, context);
                     terminalControllerService.createLogcat(trackedActivity, true, context);
-                    sendMessage(message, MSG_REGISTERED_ACTIVITY);
+                    log.errorAndThrowIfNull(messenger.messengerToSendMessagesTo);
+                    log.errorAndThrowIfNull(message.replyTo);
+                    messenger.sendMessageToServer(MSG_REGISTERED_ACTIVITY);
                 }
             })
             .addResponse(MSG_START_TERMINAL_ACTIVITY, (message) -> {
                 logUtils.log_Info("SERVER: starting terminal activity");
-                sendMessage(message, MSG_NO_REPLY);
                 Intent activity = new Intent(terminalService, TerminalActivity.class);
                 activity.addFlags(FLAG_ACTIVITY_NEW_TASK);
                 startActivity(activity);
-                sendMessage(message, MSG_STARTED_TERMINAL_ACTIVITY);
+                messenger.sendMessageToServer(MSG_STARTED_TERMINAL_ACTIVITY);
             })
         .addResponse(MSG_CALLBACK_INVOKED, (message) -> {
             logUtils.log_Info("INVOKED CALLBACK");
@@ -361,16 +364,39 @@ Niklas Gürtler:moyai:  1 day ago
                                 JNI.close(terminal.mTerminalFileDescriptor);
                                 removeSession(terminal);
                             }
+                            terminalControllerService.terminalController.activity.runOnUiThread(
+                                new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        terminalControllerService.mListViewAdapter.notifyDataSetChanged();
+                                    }
+                                }
+                            );
 
                             int index = id.first;
 
-                            // TODO: is this correct?
-                            // close log fd's
-                            TrackedActivity trackedActivity = mTrackedActivities.get(index);
-                            JNI.close(trackedActivity.pseudoTerminalSlave.detachFd());
-                            JNI.close(trackedActivity.pseudoTerminalMaster.detachFd());
+                            // TODO: handle force close, in this event, the tracked activity
+                            //  seems to disappear completely from the list
+                            //  it is unknown if this item is replaced with the next item in the
+                            //  list, or if the entire list gets erased
+                            //  work around this in the case of one monitored activity
 
-                            mTrackedActivities.remove(index);
+                            if (index >= mTrackedActivities.size()) {
+                                JNI.puts(
+                                    "TODO: handle force close, in this event, the tracked activity" +
+                                    "      seems to disappear completely from the list" +
+                                    "      it is unknown if this item is replaced with the next item in the" +
+                                    "      list, or if the entire list gets erased" +
+                                    "      work around this in the case of one monitored activity");
+                            } else {
+                                // TODO: is this correct?
+                                // close log fd's
+                                TrackedActivity trackedActivity = mTrackedActivities.get(index);
+                                JNI.close(trackedActivity.pseudoTerminalSlave.detachFd());
+                                JNI.close(trackedActivity.pseudoTerminalMaster.detachFd());
+
+                                mTrackedActivities.remove(index);
+                            }
                             JNI.puts("removed");
                             logUtils.log_Info("removed");
                         }
@@ -383,7 +409,9 @@ Niklas Gürtler:moyai:  1 day ago
     }
 
     public void sendMessage(Message msg, int what) {
-        sendMessage(msg, null, what, 0, 0, null);
+        log.log_Info("messenger.sendMessageToServer(what);");
+        messenger.sendMessageToServer(what);
+//        sendMessage(msg, null, what, 0, 0, null);
     }
 
     private void sendMessage(Message msg, int what, int arg1) {

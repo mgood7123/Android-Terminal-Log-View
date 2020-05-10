@@ -271,15 +271,21 @@ JNIEXPORT void JNICALL Java_alpine_term_emulator_JNI_setPtyUTF8Mode(JNIEnv* ALPI
 JNIEXPORT int JNICALL Java_alpine_term_emulator_JNI_waitFor(JNIEnv* ALPINE_TERM_UNUSED(env), jclass ALPINE_TERM_UNUSED(clazz), jint pid)
 {
     int status;
-    waitpid(pid, &status, 0);
-    if (WIFEXITED(status)) {
-        return WEXITSTATUS(status);
-    } else if (WIFSIGNALED(status)) {
-        return -WTERMSIG(status);
-    } else {
-        // Should never happen - waitpid(2) says "One of the first three macros will evaluate to a non-zero (true) value".
-        return 0;
-    }
+    int r = waitpid(pid, &status, 0);
+    int errno_ = errno;
+    const char * errnoString = strerror(errno);
+    printf("waitpid returned %d, errno: %d, errno string: %s\n", r, errno_, errnoString);
+    LOGE("waitpid returned %d, errno: %d, errno string: %s\n", r, errno_, errnoString);
+    if (r != -1) {
+        if (WIFEXITED(status)) {
+            return WEXITSTATUS(status);
+        } else if (WIFSIGNALED(status)) {
+            return -WTERMSIG(status);
+        } else {
+            // Should never happen - waitpid(2) says "One of the first three macros will evaluate to a non-zero (true) value".
+            return 0;
+        }
+    } else return -999;
 }
 
 JNIEXPORT void JNICALL Java_alpine_term_emulator_JNI_close(JNIEnv* ALPINE_TERM_UNUSED(env), jclass ALPINE_TERM_UNUSED(clazz), jint fileDescriptor)

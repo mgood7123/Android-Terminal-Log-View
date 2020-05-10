@@ -58,6 +58,8 @@ import android.view.inputmethod.InputConnection;
 import android.widget.PopupWindow;
 import android.widget.Scroller;
 
+import com.example.libclient_service.LibService_Messenger;
+
 import alpine.term.Config;
 import alpine.term.LogUtils;
 import alpine.term.R;
@@ -417,6 +419,11 @@ public final class TerminalView extends View {
             activity.runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
+                    if (!LibService_Messenger.mainThread.equals(Thread.currentThread())) {
+                        logUtils.errorAndThrow(
+                            "ERROR: runOnUiThread IS NOT BEING INVOKED ON REAL UI THREAD"
+                        );
+                    }
                     setContentDescription(getText());
                 }
             });

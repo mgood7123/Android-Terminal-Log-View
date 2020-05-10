@@ -18,6 +18,7 @@ import android.os.RemoteException;
 
 import com.example.libclient_service.LibService_Client;
 import com.example.libclient_service.LibService_Messenger;
+import com.example.libclient_service.RunnableArgument;
 
 import java.util.ArrayList;
 
@@ -70,33 +71,37 @@ public class TerminalClientAPI extends LibService_Client {
 
     @Override
     public void onServiceConnectedCallback(IBinder boundService) {
+        log.logParentMethodName_Info();
+        log.logMethodName_Info();
         messenger
+            .addResponse(LibService_Messenger.PONG)
             .addResponse(MSG_NO_REPLY)
             .addResponse(MSG_REGISTERED_CLIENT, (message) -> {
                 messenger.log.log_Info("registered");
-                messenger.sendMessageToServerNonBlocking(MSG_REGISTRATION_CONFIRMED);
+                messenger.sendMessageToServer(MSG_REGISTRATION_CONFIRMED);
                 messenger.log.log_Info("sent message to server");
             })
             .addResponse(MSG_UNREGISTERED_CLIENT, (message) -> {
                 messenger.log.log_Info("unregistered");
-                messenger.sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
             })
             .addResponse(MSG_UNREGISTERED_CLIENT, (message) -> {
                 messenger.log.log_Info("SERVER IS ALIVE");
-                messenger.sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
             })
             .addResponse(MSG_REGISTER_ACTIVITY_FAILED, (message) -> {
-                messenger.sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
+                messenger.log.log_Info("failed to register activity");
             })
             .addResponse(MSG_REGISTERED_ACTIVITY, (message) -> {
-                messenger.sendMessageToServerNonBlocking(MSG_CALLBACK_INVOKED);
+                messenger.log.log_Info("registered activity");
             })
-            .addResponse(MSG_STARTED_TERMINAL_ACTIVITY)
+            .addResponse(MSG_STARTED_TERMINAL_ACTIVITY, (messsage) -> {
+                messenger.log.log_Info("started terminal activity");
+            })
             .bind(boundService)
             .start();
 
         // We want to monitor the service for as long as we are
         // connected to it.
+        messenger.ping();
         logUtils.log_Info("registering");
         messenger.sendMessageToServer(MSG_REGISTER_CLIENT);
 

@@ -32,6 +32,7 @@ import androidx.drawerlayout.widget.DrawerLayout;
 import androidx.viewpager.widget.PagerAdapter;
 import androidx.viewpager.widget.ViewPager;
 
+import com.example.libclient_service.LibService_Messenger;
 import com.example.libclient_service.LibService_Service;
 
 import java.io.File;
@@ -92,11 +93,13 @@ public class TerminalController {
     RelativeLayout mainView;
 
     void bind() {
+        logUtils.log_Info("starting TerminalControllerService and binding to activity");
         terminalControllerService = new TerminalControllerService();
         terminalControllerService.terminalController = this;
         int managerId = service.addServiceManager(terminalControllerService);
         service.addService(TerminalService.class, managerId);
         service.bindLocal(activity, managerId);
+        logUtils.log_Info("started TerminalControllerService and binded to activity");
     }
 
     public void onCreate(Activity activity, TerminalView viewById) {
@@ -461,6 +464,11 @@ public class TerminalController {
         terminalControllerService.terminalController.activity.runOnUiThread(new Runnable() {
             @Override
             public void run() {
+                if (!LibService_Messenger.mainThread.equals(Thread.currentThread())) {
+                    logUtils.errorAndThrow(
+                        "ERROR: runOnUiThread IS NOT BEING INVOKED ON REAL UI THREAD"
+                    );
+                }
                 logUtils.log_Info("notifying data set changed");
                 terminalControllerService.mListViewAdapter.notifyDataSetChanged();
                 logUtils.log_Info("notified data set changed");

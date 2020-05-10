@@ -30,6 +30,7 @@ public class LibService_LogUtils {
     }
 
     public int log_Info(String message) {
+        getParentMethodName();
         return Log.i(TAG, message);
     }
 
@@ -120,7 +121,7 @@ public class LibService_LogUtils {
     public void assertNotNull(String message, Object object) {
         log_Info("checking if object is null...");
         assertTrue(message, object != null);
-        log_Info("checking if object is not null");
+        log_Info("object is not null");
     }
 
     public final Throwable error() {
@@ -211,62 +212,62 @@ public class LibService_LogUtils {
      * alias for logMethodName_Verbose()
      */
     public void logMethodName() {
-        log_Verbose(getMethodName(1) + "() called");
+        log_Verbose(getMethod(1) + " called");
     }
 
     public void logMethodName_Verbose() {
-        log_Verbose(getMethodName(1) + "() called");
+        log_Verbose(getMethod(1) + " called");
     }
 
     public void logMethodName_Debug() {
-        log_Debug(getMethodName(1) + "() called");
+        log_Debug(getMethod(1) + " called");
     }
 
     public void logMethodName_Info() {
-        log_Info(getMethodName(1) + "() called");
+        log_Info(getMethod(1) + " called");
     }
 
     public void logMethodName_Warning() {
-        log_Warning(getMethodName(1) + "() called");
+        log_Warning(getMethod(1) + " called");
     }
 
     public void logMethodName_Error() {
-        log_Error(getMethodName(1) + "() called");
+        log_Error(getMethod(1) + " called");
     }
 
     public void logMethodName_What_A_Terrible_Failure() {
-        log_What_A_Terrible_Failure(getMethodName(1) + "() called");
+        log_What_A_Terrible_Failure(getMethod(1) + " called");
     }
 
     /**
      * alias for logParentMethodName_Verbose()
      */
     public void logParentMethodName() {
-        log_Verbose(getParentMethodName(1) + "() called");
+        log_Verbose(getParentMethod(1) + " called");
     }
 
     public void logParentMethodName_Verbose() {
-        log_Verbose(getParentMethodName(1) + "() called");
+        log_Verbose(getParentMethod(1) + " called");
     }
 
     public void logParentMethodName_Debug() {
-        log_Debug(getParentMethodName(1) + "() called");
+        log_Debug(getParentMethod(1) + " called");
     }
 
     public void logParentMethodName_Info() {
-        log_Info(getParentMethodName(1) + "() called");
+        log_Info(getParentMethod(1) + " called");
     }
 
     public void logParentMethodName_Warning() {
-        log_Warning(getParentMethodName(1) + "() called");
+        log_Warning(getParentMethod(1) + " called");
     }
 
     public void logParentMethodName_Error() {
-        log_Error(getParentMethodName(1) + "() called");
+        log_Error(getParentMethod(1) + " called");
     }
 
     public void logParentMethodName_What_A_Terrible_Failure() {
-        log_What_A_Terrible_Failure(getParentMethodName(1) + "() called");
+        log_What_A_Terrible_Failure(getParentMethod(1) + " called");
     }
 
     public String getMethodName() {
@@ -275,6 +276,22 @@ public class LibService_LogUtils {
 
     public String getMethodName(int methodDepthOffset) {
         return Thread.currentThread().getStackTrace()[3+methodDepthOffset].getMethodName();
+    }
+
+    public StackTraceElement getMethod() {
+        return getMethod(1);
+    }
+
+    public StackTraceElement getMethod(int methodDepthOffset) {
+        return Thread.currentThread().getStackTrace()[3+methodDepthOffset];
+    }
+
+    public StackTraceElement getParentMethod() {
+        return getParentMethod(1);
+    }
+
+    public StackTraceElement getParentMethod(int methodDepthOffset) {
+        return Thread.currentThread().getStackTrace()[4+methodDepthOffset];
     }
 
     public String getParentMethodName() {

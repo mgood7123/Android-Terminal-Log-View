@@ -57,7 +57,7 @@ public final class JNI {
     /**
      * Causes the calling thread to wait for the process associated with the receiver to finish executing.
      *
-     * @return if >= 0, the exit status of the process. If < 0, the signal causing the process to stop negated.
+     * @return if >= 0, the exit status of the process. If < 0, the signal causing the process to stop negated. If -9999, an error has occured and the error has been logged to both the terminal and logcat
      */
     public static native int waitFor(int processId);
 

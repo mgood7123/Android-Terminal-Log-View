@@ -10,10 +10,6 @@ import android.os.Looper;
 import android.os.Message;
 import android.os.Messenger;
 import android.os.RemoteException;
-import android.util.Log;
-
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
 
 import java.util.ArrayList;
 
@@ -21,6 +17,8 @@ import java.util.ArrayList;
 
 public class LibService_Messenger {
 
+    public static final int PING = -5;
+    public static final int PONG = -6;
     public LibService_LogUtils log;
 
     LibService_Messenger() {
@@ -97,12 +95,22 @@ public class LibService_Messenger {
         return sendMessageToServer(null, what, arg1, arg2, obj, bundle);
     }
 
+    private static final int messageType_Message = 9997;
+    private static final String messageType_Message_Bundle_Parcelable_Key = "Message";
+    private static final int messageType_Notification = 9998;
+
     public boolean sendMessageToServer(Handler handler, int what, int arg1, int arg2, Object obj, Bundle bundle) {
         try {
             Message msg = Message.obtain(handler, what, arg1, arg2, obj);
             if (bundle != null) msg.setData(bundle);
             msg.replyTo = messengerToHandleMessages;
-            messengerToSendMessagesTo.send(msg);
+
+            Message msgServer = Message.obtain(handler, messageType_Message);
+            Bundle bund = new Bundle();
+            bund.putParcelable(messageType_Message_Bundle_Parcelable_Key, msg);
+            msgServer.setData(bund);
+
+            messengerToSendMessagesTo.send(msgServer);
             waitForReply();
             return true;
         } catch (RemoteException e) {
@@ -112,34 +120,9 @@ public class LibService_Messenger {
         }
     }
 
-    public boolean sendMessageToServerNonBlocking(int what) {
-        return sendMessageToServerNonBlocking(null, what, 0, 0, null);
-    }
-
-    private boolean sendMessageToServerNonBlocking(int what, int arg1) {
-        return sendMessageToServerNonBlocking(null, what, arg1, 0, null);
-    }
-
-    private boolean sendMessageToServerNonBlocking(int what, int arg1, int arg2) {
-        return sendMessageToServerNonBlocking(null, what, arg1, arg2, null);
-    }
-
-    public boolean sendMessageToServerNonBlocking(int what, Object obj) {
-        return sendMessageToServerNonBlocking(null, what, 0, 0, obj);
-    }
-
-    private boolean sendMessageToServerNonBlocking(int what, int arg1, Object obj) {
-        return sendMessageToServerNonBlocking(null, what, arg1, 0, obj);
-    }
-
-    private boolean sendMessageToServerNonBlocking(int what, int arg1, int arg2, Object obj) {
-        return sendMessageToServerNonBlocking(null, what, arg1, arg2, obj);
-    }
-
-    public boolean sendMessageToServerNonBlocking(Handler handler, int what, int arg1, int arg2, Object obj) {
+    public boolean sendNotificationToServer() {
         try {
-            Message msg = Message.obtain(handler, what, arg1, arg2, obj);
-            msg.replyTo = messengerToHandleMessages;
+            Message msg = Message.obtain(handler, messageType_Notification);
             messengerToSendMessagesTo.send(msg);
             return true;
         } catch (RemoteException e) {
@@ -152,51 +135,144 @@ public class LibService_Messenger {
     public Messenger messengerToHandleMessages;
     public Messenger messengerToSendMessagesTo;
     final int DEFAULT_CODE = 9999;
+    // DESIGN V1
+    // each function runs in the main processing thread
+    // each function is a RunnableArgument
+    // if a function calls to client which calls back to
+    // main processing thread then a *deadlock* will occur
+
+    // this is due to the main processing thread
+    // processing cmd A, during which, cmd A
+    // requests client to process cmd B
+    // which then sends response to server to
+    // notify the server that cmd B has finished
+    // however the server cannot be notified of this
+    // as cmd A is waiting for cmd B to complete
+
+    // DESIGN V2
+    //  DEADLOCK RESOLUTION
+    //      DEADLOCK
+    //          this is due to the main processing thread
+    //          processing cmd A, during which, cmd A
+    //          requests client to process cmd B
+    //          which then sends response to server to
+    //          notify the server that cmd B has finished
+    //          however the server cannot be notified of this
+    //          as cmd A is waiting for cmd B to complete
+    //
+    //      HOW TO RESOLVE...
+    //          INFO
+    //              in a standard function, cmd A would invoke
+    //              the instruction cmd B, which would run until
+    //              completion, and return to the next instruction
+    //              that is after the function call
+    //          IMPORTANT
+    //              cmd B request to the client, must be synchronized
+    //              with the server
+    //          RESOLUTION
+    //              a call stack WILL NOT work as the client must be
+    //              able to notify the server that the cmd requested by
+    //              the server has been completed
+    //
+    //              an object may be updated if it is sent, updated, and obtained
+    //
+    //              if the command completions notification occur in a seperate thread as
+    //              the command processes are taking place in, it is possible to inform
+    //              the server of a command completion without blocking the main processing
+    //              thread
 
     public RunnableArgument<Message> defaultCallback = new RunnableArgument<Message>() {
         @Override
         public void run() {
-            sendMessageToServerNonBlocking(DEFAULT_CODE);
+            sendNotificationToServer();
         }
 
         @Override
         public void run(Message object) {
-            sendMessageToServerNonBlocking(DEFAULT_CODE);
+            sendNotificationToServer();
         }
     };
+
+    public void Notify() {
+        // handled messages are handled in background thread
+        // then notify about finished message.
+        synchronized (waitOnMe) {
+            waitOnMe.notifyAll();
+        }
+    }
+
+    public void HandleMain(Message message) {
+        boolean messageHandled = false;
+        for (int i = 0, responsesSize = responses.size(); i < responsesSize; i++) {
+            Response response = responses.get(i);
+            if (message.what == response.what) {
+                messageHandled = true;
+                if (response.whatToExecute != null) response.whatToExecute.run(message);
+                break;
+            }
+        }
+        // TODO: handle unspecified response, by default we send and do not wait for a reply
+        if (!messageHandled) {
+            log.log_Warning("received an unknown response code: " + message.what);
+        }
+    }
+
+    public static Thread mainThread = Looper.getMainLooper().getThread();
 
     public final HandlerThread handlerThread = new HandlerThread("LibMessenger");
     public Looper looper;
     public Handler handler;
     public final Handler.Callback callback = new Handler.Callback() {
-        @SuppressWarnings("DuplicateBranchesInSwitch")
         @Override
         public boolean handleMessage(Message message) {
             if (message == null) {
                 log.log_Warning("message was null");
-                return true;
             } else {
-                boolean messageHandled = false;
-                for (int i = 0, responsesSize = responses.size(); i < responsesSize; i++) {
-                    Response response = responses.get(i);
-                    if (message.what == response.what) {
-                        messageHandled = true;
-                        if (response.whatToExecute != null) response.whatToExecute.run(message);
-                        break;
-                    }
+                if (message.what == messageType_Notification) {
+                    log.log_Info("received Notification");
+                    new Thread() {
+                        @Override
+                        public void run() {
+                            super.run();
+                            synchronized (waitOnMe) {
+                                waitOnMe.notifyAll();
+                            }
+                        }
+                    }.start();
+                } else if (message.what == messageType_Message) {
+                    log.log_Info("received Message");
+                    log.errorAndThrowIfNull(message);
+                    Bundle bund = message.getData();
+                    log.errorAndThrowIfNull(bund);
+                    Message msg = bund.getParcelable(messageType_Message_Bundle_Parcelable_Key);
+                    log.errorAndThrowIfNull(msg);
+                    new Thread() {
+                        @Override
+                        public void run() {
+                            super.run();
+                            Looper.prepare();
+                            Messenger origin = messengerToSendMessagesTo;
+                            boolean originIsNull = origin == null;
+
+                            if (originIsNull) {
+                                messengerToSendMessagesTo = msg.replyTo;
+                                log.errorAndThrowIfNull(messengerToSendMessagesTo, msg.replyTo);
+                            }
+
+                            HandleMain(msg);
+                            log.log_Info("sending notification");
+                            sendNotificationToServer();
+                            log.log_Info("sent Notification");
+
+                            if (originIsNull) messengerToSendMessagesTo = origin;
+                            Looper.loop();
+                        }
+                    }.start();
+                } else {
+                    log.log_Info("received unknown message id: " + message.what);
                 }
-                // TODO: handle unspecified response, by default we send and do not wait for a reply
-                if (!messageHandled) {
-                    log.log_Warning("recieved an unknown response code: " + message.what);
-                    log.errorAndThrowIfNull(defaultCallback).run(message);
-                }
-                // handled messages are handled in background thread
-                // then notify about finished message.
-                synchronized (waitOnMe) {
-                    waitOnMe.notifyAll();
-                }
-                return true;
             }
+            return true;
         }
     };
 
@@ -240,6 +316,12 @@ server.defineResponseCodes(
         messengerToSendMessagesTo = new Messenger(serviceContainingMessenger);
         log.log_Info("binded to remote service");
         return this;
+    }
+
+    public void ping() {
+        log.log_Info("sending ping");
+        sendMessageToServer(PING);
+        log.log_Info("sent ping");
     }
 
     public LibService_Messenger start() {
