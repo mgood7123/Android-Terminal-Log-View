@@ -56,6 +56,39 @@ public class InfiniteLoop {
     private int sleepTimeInNanoseconds = 0;
     private int sleepTimeInMilliseconds = 0;
 
+    /**
+     * @param condition a condition to check for, this can be set to any valid CODE block that can
+     *                 be put into a function such as the following:
+     *                  <pre> {@code boolean check_condition() {
+     *      // CODE
+     *  }
+     *  // ...
+     *      while ( check_condition() ) {
+     *          // do stuff
+     *      }
+     *                  }</pre>
+     *                  for example:
+     * <pre>{@code boolean a = true;
+     * boolean b = true;
+     * Object c = null;
+     *
+     * loop(
+     *     () -> a ? true : (b ? false : (c != null))
+     * ); } </pre>
+     * or
+     * <pre>{@code boolean a = true;
+     * boolean b = true;
+     * Object c = null;
+     *
+     * loop(
+     *     () -> {
+     *         if (a) return true;
+     *         if (b) return false;
+     *         return c != null;
+     *     }
+     * );
+     * } </pre>
+     */
     public void loop(RunnableReturn<Boolean> condition) {
         while(condition.run()) {
             try {
@@ -66,6 +99,26 @@ public class InfiniteLoop {
         }
     }
 
+    /**
+     * @param runnable a {@link RunnableThrowableException} object, this runnable is capable of
+     *                throwing exceptions, this is executed in a
+     * <pre>{@code while (true)}</pre> loop:
+     *                <pre>{@code loopMayThrowException(
+     *     () -> {
+     *         // CODE HERE
+     *     }
+     * )
+     * //    while(true) {
+     * //        runnable.run();
+     * //        try {
+     * //            Thread.sleep(sleepTimeInMilliseconds, sleepTimeInNanoseconds);
+     * //        } catch (InterruptedException e) {
+     * //            throw new AssertionError("Thread Interrupted", e);
+     * //        }
+     * //    }
+     * }</pre>
+     * @throws Exception
+     */
     public void loopMayThrowException(RunnableThrowableException runnable) throws Exception {
         while(true) {
             runnable.run();
@@ -76,6 +129,63 @@ public class InfiniteLoop {
             }
         }
     }
+
+    /**
+     * @param condition a condition to check for, this can be set to any valid CODE block that can
+     *                 be put into a function such as the following:
+     *                  <pre> {@code boolean check_condition() {
+     *      // CODE
+     *  }
+     *  // ...
+     *      while ( check_condition() ) {
+     *          // do stuff
+     *      }
+     *                  }</pre>
+     *                  for example:
+     * <pre>{@code boolean a = true;
+     * boolean b = true;
+     * Object c = null;
+     *
+     * loopMayThrowException(
+     *     () -> a ? true : (b ? false : (c != null)),
+     *     runnableThrowableExceptionObject
+     * ); } </pre>
+     * or
+     * <pre>{@code boolean a = true;
+     * boolean b = true;
+     * Object c = null;
+     *
+     * loopMayThrowException(
+     *     () -> {
+     *         if (a) return true;
+     *         if (b) return false;
+     *         return c != null;
+     *     },
+     *     runnableThrowableExceptionObject
+     * );
+     * } </pre>
+     * @param runnable a {@link RunnableThrowableException} object, this runnable is capable of
+     *                throwing exceptions, this is executed in a
+     * <pre>{@code while (
+     *     condition.run()
+     * )}</pre> loop:
+     *                <pre>{@code loopMayThrowException(
+     *     () -> true,
+     *     () -> {
+     *         // CODE HERE
+     *     }
+     * )
+     * //    while(condition.run()) {
+     * //        runnable.run();
+     * //        try {
+     * //            Thread.sleep(sleepTimeInMilliseconds, sleepTimeInNanoseconds);
+     * //        } catch (InterruptedException e) {
+     * //            throw new AssertionError("Thread Interrupted", e);
+     * //        }
+     * //    }
+     * }</pre>
+     * @throws Exception
+     */
     public void loopMayThrowException(RunnableReturn<Boolean> condition, RunnableThrowableException runnable) throws Exception {
         while(condition.run()) {
             runnable.run();
@@ -87,6 +197,28 @@ public class InfiniteLoop {
         }
     }
 
+    /**
+     * @param runnable a {@link Runnable} object, this is executed in a
+     * <pre>{@code while (true)}</pre> loop:
+     *                <pre>{@code loop(
+     *     () -> true,
+     *     new Runnable() {
+     *         @Override
+     *         public void run() {
+     *             // CODE HERE
+     *         }
+     *     }
+     * )
+     * //    while(true) {
+     * //        runnable.run();
+     * //        try {
+     * //            Thread.sleep(sleepTimeInMilliseconds, sleepTimeInNanoseconds);
+     * //        } catch (InterruptedException e) {
+     * //            throw new AssertionError("Thread Interrupted", e);
+     * //        }
+     * //    }
+     * }</pre>
+     */
     public void loop(Runnable runnable) {
         while(true) {
             runnable.run();
@@ -97,6 +229,64 @@ public class InfiniteLoop {
             }
         }
     }
+
+    /**
+     * @param condition a condition to check for, this can be set to any valid CODE block that can
+     *                 be put into a function such as the following:
+     *                  <pre> {@code boolean check_condition() {
+     *      // CODE
+     *  }
+     *  // ...
+     *      while ( check_condition() ) {
+     *          // do stuff
+     *      }
+     *                  }</pre>
+     *                  for example:
+     * <pre>{@code boolean a = true;
+     * boolean b = true;
+     * Object c = null;
+     *
+     * loop(
+     *     () -> a ? true : (b ? false : (c != null)),
+     *     runnableObject
+     * ); } </pre>
+     * or
+     * <pre>{@code boolean a = true;
+     * boolean b = true;
+     * Object c = null;
+     *
+     * loop(
+     *     () -> {
+     *         if (a) return true;
+     *         if (b) return false;
+     *         return c != null;
+     *     },
+     *     runnableObject
+     * );
+     * } </pre>
+     * @param runnable a {@link Runnable} object, this is executed in a
+     * <pre>{@code while (
+     *     condition.run()
+     * )}</pre> loop:
+     *                <pre>{@code loop(
+     *     () -> true,
+     *     new Runnable() {
+     *         @Override
+     *         public void run() {
+     *             // CODE HERE
+     *         }
+     *     }
+     * )
+     * //    while(condition.run()) {
+     * //        runnable.run();
+     * //        try {
+     * //            Thread.sleep(sleepTimeInMilliseconds, sleepTimeInNanoseconds);
+     * //        } catch (InterruptedException e) {
+     * //            throw new AssertionError("Thread Interrupted", e);
+     * //        }
+     * //    }
+     * }</pre>
+     */
     public void loop(RunnableReturn<Boolean> condition, Runnable runnable) {
         while(condition.run()) {
             runnable.run();
