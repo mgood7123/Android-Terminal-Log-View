@@ -29,16 +29,15 @@ import android.os.Message;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.system.OsConstants;
-import android.util.Log;
+
+import com.example.libclient_service.InfiniteLoop;
 
 import java.io.File;
 import java.io.FileDescriptor;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -264,7 +263,9 @@ public final class TerminalSession extends TerminalOutput {
                 try (FileInputStream termIn = new FileInputStream(terminalFileDescriptorWrapped)) {
                     final byte[] buffer = new byte[4096];
                     TermSessionInputReader___shell__running.set(true);
-                    while (sessionIsAlive.get()) {
+                    InfiniteLoop infiniteLoop = new InfiniteLoop();
+                    infiniteLoop.setSleepTimeInMicroseconds(500);
+                    infiniteLoop.loopMayThrowException(() -> sessionIsAlive.get(), () -> {
                         if (termIn.available() != 0) {
                             int read = termIn.read(buffer);
                             if (read == -1) {
@@ -279,7 +280,7 @@ public final class TerminalSession extends TerminalOutput {
                             }
                             mMainThreadHandler.sendEmptyMessage(MSG_NEW_INPUT);
                         }
-                    }
+                    });
                     TermSessionInputReader___shell__running.set(false);
                 } catch (Exception e) {
                     // Ignore, just shutting down.
@@ -294,7 +295,9 @@ public final class TerminalSession extends TerminalOutput {
                 final byte[] buffer = new byte[4096];
                 try (FileOutputStream termOut = new FileOutputStream(terminalFileDescriptorWrapped)) {
                     TermSessionOutputWriter__shell__running.set(true);
-                    while (sessionIsAlive.get()) {
+                    InfiniteLoop infiniteLoop = new InfiniteLoop();
+                    infiniteLoop.setSleepTimeInMicroseconds(500);
+                    infiniteLoop.loopMayThrowException(() -> sessionIsAlive.get(), () -> {
                         int bytesToWrite = mTerminalToProcessIOQueue.read(buffer, true);
                         if (bytesToWrite == -1) {
                             logUtils.log_Error("stdin writer return -1");
@@ -302,9 +305,9 @@ public final class TerminalSession extends TerminalOutput {
                             return;
                         }
                         termOut.write(buffer, 0, bytesToWrite);
-                    }
+                    });
                     TermSessionOutputWriter__shell__running.set(false);
-                } catch (IOException e) {
+                } catch (Exception e) {
                     // Ignore.
                     TermSessionOutputWriter__shell__running.set(false);
                 }
@@ -344,7 +347,9 @@ public final class TerminalSession extends TerminalOutput {
                     if (!log.canWrite()) log.setWritable(true);
                     FileOutputStream logFile = new FileOutputStream(log);
                     FileDescriptor logFileFileDescriptor = logFile.getFD();
-                    while (sessionIsAlive.get()) {
+                    InfiniteLoop infiniteLoop = new InfiniteLoop();
+                    infiniteLoop.setSleepTimeInMicroseconds(500);
+                    infiniteLoop.loopMayThrowException(() -> sessionIsAlive.get(), () -> {
                         if (termIn.available() != 0) {
                             int read = termIn.read(buffer);
                             if (read == -1) {
@@ -361,7 +366,7 @@ public final class TerminalSession extends TerminalOutput {
                             }
                             mMainThreadHandler.sendEmptyMessage(MSG_NEW_INPUT);
                         }
-                    }
+                    });
                     TermSessionInputReader___log____running.set(false);
                 } catch (Exception e) {
                     // Ignore, just shutting down.
@@ -397,7 +402,9 @@ public final class TerminalSession extends TerminalOutput {
                     FileOutputStream logFile = new FileOutputStream(log);
                     FileDescriptor logFileFileDescriptor = logFile.getFD();
                     TermSessionInputReader___logcat_running.set(true);
-                    while (sessionIsAlive.get()) {
+                    InfiniteLoop infiniteLoop = new InfiniteLoop();
+                    infiniteLoop.setSleepTimeInMicroseconds(500);
+                    infiniteLoop.loopMayThrowException(() -> sessionIsAlive.get(), () -> {
                         if (termIn.available() != 0) {
                             int read = termIn.read(buffer);
                             if (read == -1) {
@@ -414,7 +421,7 @@ public final class TerminalSession extends TerminalOutput {
                             }
                             mMainThreadHandler.sendEmptyMessage(MSG_NEW_INPUT);
                         }
-                    }
+                    });
                     TermSessionInputReader___logcat_running.set(false);
                 } catch (Exception e) {
                     // Ignore, just shutting down.

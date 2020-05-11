@@ -9,6 +9,7 @@ import android.os.Messenger;
 import androidx.annotation.Nullable;
 
 import java.util.ArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public abstract class LibService_Service_Component extends Service {
 
@@ -23,6 +24,8 @@ public abstract class LibService_Service_Component extends Service {
 
     public LibService_Service_Connection manager = null;
 
+    public AtomicBoolean onServiceConnectedCallbackCalled = new AtomicBoolean(false);
+
     /**
      * This service is only bound from inside the same process and never uses IPC.
      */
@@ -36,12 +39,17 @@ public abstract class LibService_Service_Component extends Service {
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
+
+        // can probs be fixed by connection/binding re-ordering
+
         if (intent.hasExtra("BINDING_TYPE")) {
             if (intent.getStringExtra("BINDING_TYPE").contentEquals("BINDING_LOCAL")) {
+                log.log_Info("onBind: binded to local service");
                 onMessengerBindLocal();
                 return new Local();
             }
         }
+        log.log_Info("onBind: binded to remote service");
         onMessengerBindRemote();
         messenger.start();
         return messenger.getBinder();

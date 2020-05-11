@@ -205,7 +205,13 @@ public class LibService_LogUtils {
 
     @SuppressWarnings("ConstantOnRightSideOfComparison")
     public final void errorAndThrow(String message) {
-        assertNotNull(message, null);
+        throw new AssertionError(message);
+
+    }
+
+    @SuppressWarnings("ConstantOnRightSideOfComparison")
+    public final void errorAndThrow(String message, Throwable throwable) {
+        throw new AssertionError(message, throwable);
     }
 
     /**

@@ -52,7 +52,6 @@ public class TerminalControllerService extends LibService_Service_Connection {
 
     @Override
     public void onServiceConnectedCallback(IBinder boundService) {
-
         mTerminalService = (TerminalService) service;
         terminalControllerService = (TerminalControllerService) service.manager;
 
@@ -269,8 +268,6 @@ public class TerminalControllerService extends LibService_Service_Connection {
     public boolean mIsBound;
 
     private ArrayList<Runnable> runnableArrayList = new ArrayList<>();
-
-    boolean isLocalService = false;
 
     Context context = null;
 

@@ -32,14 +32,9 @@ import android.os.Binder;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.HandlerThread;
-import android.os.IBinder;
-import android.os.Looper;
 import android.os.Message;
-import android.os.Messenger;
 import android.os.PowerManager;
 import android.os.RemoteException;
-import android.util.Log;
 import android.util.Pair;
 import android.widget.ArrayAdapter;
 
@@ -48,9 +43,9 @@ import java.util.List;
 
 import androidx.core.app.NotificationCompat;
 
+import com.example.libclient_service.InfiniteLoop;
 import com.example.libclient_service.LibService_Messenger;
 import com.example.libclient_service.LibService_Service_Component;
-import com.example.libclient_service.RunnableArgument;
 
 import alpine.term.emulator.JNI;
 import alpine.term.emulator.TerminalSession;
@@ -246,6 +241,7 @@ public class TerminalService extends LibService_Service_Component implements Ses
                 } else {
                     logUtils.log_Info("SERVER: PID OF TRACKED ACTIVITY: " + trackedActivity.pid);
                     terminalService.mTrackedActivities.add(trackedActivity);
+                    waitForManagerToStart();
                     logUtils.errorAndThrowIfNull(
                         terminalControllerService,
                         "SERVER: terminalControllerService is null"
@@ -266,6 +262,16 @@ public class TerminalService extends LibService_Service_Component implements Ses
         .addResponse(MSG_CALLBACK_INVOKED, (message) -> {
             logUtils.log_Info("INVOKED CALLBACK");
         });
+    }
+
+    private void waitForManagerToStart() {
+        if (!onServiceConnectedCallbackCalled.get()) {
+            logUtils.log_Error("waiting for onServiceConnectedCallbackCalled");
+            InfiniteLoop infiniteLoop = new InfiniteLoop();
+            infiniteLoop.setSleepTimeInMicroseconds(500);
+            infiniteLoop.loop(() -> !onServiceConnectedCallbackCalled.get());
+            logUtils.log_Error("onServiceConnectedCallbackCalled has been set");
+        }
     }
 
     @SuppressLint({"Wakelock", "WakelockTimeout"})
@@ -304,20 +310,15 @@ public class TerminalService extends LibService_Service_Component implements Ses
         new Thread("ActivityMonitor") {
             @Override
             public void run() {
-                //noinspection InfiniteLoopStatement
-                while(true) {
+                InfiniteLoop infiniteLoop = new InfiniteLoop();
+                infiniteLoop.setSleepTimeInMicroseconds(500);
+                infiniteLoop.loop(() -> {
+                    // if there are tracked activities
                     if (!mTrackedActivities.isEmpty()) {
-                        // The client is dead.  Remove it from the list;
                         List<Pair<Integer, Pair<Pair<Integer, String>, String>>> ids =
                             new ArrayList<>();
                         for (int i = mTrackedActivities.size() - 1; i >= 0; i--) {
                             TrackedActivity trackedActivity = mTrackedActivities.get(i);
-                            /*
-pidof: cus i use it to determine if the target process is still running or not
-Niklas Gürtler:moyai:  1 day ago
-    For that you should use the waitpid C function or the SIGCHLD signal or Process.waitFor
-     from Java. Waiting via pidof is bad (edited)
-                             */
                             if (JNI.hasDied(trackedActivity.packageName)) {
 
                                 // TODO: is this correct?
@@ -398,7 +399,7 @@ Niklas Gürtler:moyai:  1 day ago
                             logUtils.log_Info("removed");
                         }
                     }
-                }
+                });
             }
         }.start();
 

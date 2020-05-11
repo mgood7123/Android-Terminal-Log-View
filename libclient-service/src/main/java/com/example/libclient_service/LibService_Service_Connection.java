@@ -19,8 +19,6 @@ public abstract class LibService_Service_Connection implements ServiceConnection
 
     ArrayList<Class<? extends LibService_Service_Component>> components = new ArrayList<>();
 
-    boolean isLocalService = false;
-
     Activity activity = null;
 
     Context context = null;
@@ -35,17 +33,23 @@ public abstract class LibService_Service_Connection implements ServiceConnection
     @Override
     public void onServiceConnected(ComponentName componentName, IBinder boundService) {
         log.logMethodName_Info();
-        if (boundService instanceof LibService_Service_Component.Local) {
+
+        // can probs be fixed by connection/binding re-ordering
+
+        boolean isLocal = boundService instanceof LibService_Service_Component.Local;
+
+        if (isLocal) {
             LibService_Service_Component.Local local =
                 (LibService_Service_Component.Local) boundService;
             service = local.service;
             context = service.getApplicationContext();
             service.manager = this;
-            log.log_Info("binded to local service");
-            isLocalService = true;
+            log.log_Info("onServiceConnected: binded to local service");
             log.errorAndThrowIfNull(service);
-            onServiceConnectedCallback();
+            onServiceConnectedCallback(boundService);
+            service.onServiceConnectedCallbackCalled.set(true);
         } else {
+            log.log_Info("onServiceConnected: binded to remote service");
             onServiceConnectedCallback(boundService);
         }
     }
