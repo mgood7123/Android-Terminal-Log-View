@@ -406,55 +406,6 @@ public class TerminalService extends LibService_Service_Component implements Ses
         return Service.START_STICKY;
     }
 
-    public void sendMessage(Message msg, int what) {
-        log.log_Info("messenger.sendMessageToServer(what);");
-        messenger.sendMessageToServer(what);
-//        sendMessage(msg, null, what, 0, 0, null);
-    }
-
-    private void sendMessage(Message msg, int what, int arg1) {
-        sendMessage(msg, null, what, arg1, 0, null);
-    }
-
-    private void sendMessage(Message msg, int what, int arg1, int arg2) {
-        sendMessage(msg, null, what, arg1, arg2, null);
-    }
-
-    public void sendMessage(Message msg, int what, Object obj) {
-        sendMessage(msg, null, what, 0, 0, obj);
-    }
-
-    private void sendMessage(Message msg, int what, int arg1, Object obj) {
-        sendMessage(msg, null, what, arg1, 0, obj);
-    }
-
-    private void sendMessage(Message msg, int what, int arg1, int arg2, Object obj) {
-        sendMessage(msg, null, what, arg1, arg2, obj);
-    }
-
-    public void sendMessage(Message msg, Handler handler, int what, int arg1, int arg2, Object obj) {
-        if (mClients.isEmpty())
-            logUtils.log_Info("SERVER: ERROR NO CLIENTS CONNECTED");
-        else {
-            try {
-                msg.replyTo.send(Message.obtain(handler, what, arg1, arg2, obj));
-            } catch (RemoteException e) {
-                // The client is dead.  Remove it from the list;
-                // we are going through the list from back to front
-                // so this is safe to do inside the loop.
-                for (int i = mClients.size() - 1; i >= 0; i--) {
-                    try {
-                        mClients.get(i).send(Message.obtain(null, MSG_NO_REPLY));
-                    } catch (RemoteException ex) {
-                        logUtils.log_Info("SERVER: client " + i + " is dead, removing...");
-                        mClients.remove(i);
-                        logUtils.log_Info("SERVER: removed client " + i + "");
-                    }
-                }
-            }
-        }
-    }
-
     @Override
     public void onTitleChanged(TerminalSession changedSession) {
         if (mSessionChangeCallback != null) {
@@ -659,12 +610,5 @@ public class TerminalService extends LibService_Service_Component implements Ses
         } else {
             ((NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE)).notify(NOTIFICATION_ID, buildNotification());
         }
-    }
-
-    /**
-     * This service is only bound from inside the same process and never uses IPC.
-     */
-    public class LocalBinder extends Binder {
-        public final TerminalService service = TerminalService.this;
     }
 }

@@ -242,12 +242,6 @@ public class TerminalControllerService extends LibService_Service_Connection {
                 TerminalSession log = createLog(true, context);
                 createLogcat(context);
                 terminalController.switchToSession(log);
-                // create a log and logcat for each registered activity
-                for (TrackedActivity trackedActivity : mTerminalService.mTrackedActivities) {
-                    log = createLog(trackedActivity, false, context);
-                    createLogcat(trackedActivity, context);
-                    terminalController.switchToSession(log);
-                }
             } else {
                 // The service connected while not in foreground - just bail out.
                 terminalController.activity.finish();
@@ -297,6 +291,7 @@ public class TerminalControllerService extends LibService_Service_Connection {
         TerminalSession currentSession = terminalController.mTerminalView.getCurrentSession();
 
         session = mTerminalService.createShellSession(true, trackedActivity, printWelcomeMessage, context);
+        if (trackedActivity != null) log.assertTrue(session.isTrackedActivity);
         terminalController.mTerminalView.attachSession(session);
 
         int logPid;
@@ -342,6 +337,7 @@ public class TerminalControllerService extends LibService_Service_Connection {
         TerminalSession currentSession = terminalController.mTerminalView.getCurrentSession();
 
         session = mTerminalService.createLogcatSession(trackedActivity, useRoot, context);
+        if (trackedActivity != null) log.assertTrue(session.isTrackedActivity);
         terminalController.mTerminalView.attachSession(session);
 
         int logPid;
