@@ -70,13 +70,32 @@ public class TerminalClientAPI extends LibService_Client {
         runnableArrayList.clear();
     }
 
+    @Override
+    public void onServiceDisconnectedCallback(ComponentName name) {
+        // reconnect to service when service dies
+        connectToService(activity);
+    }
+
     public void runWhenConnectedToService(Runnable runnable) {
         runnableArrayList.add(runnable);
     }
 
+    // caches
+    Activity activity = null;
+    int[] pseudoTerminal = null;
+    Bundle bundle = null;
+
     public void connectToService(Activity activity) {
+
+        // cache activity if it does not exist, and then use it
+        if (this.activity == null) this.activity = activity;
+
         connectToService(activity, "alpine.term", "alpine.term.TerminalService");
-        registerActivity(activity, createPseudoTerminal());
+
+        // cache psuedoTerminal if it does not exist, and then use it
+        if (pseudoTerminal == null) pseudoTerminal = createPseudoTerminal();
+
+        registerActivity(activity, pseudoTerminal);
     }
 
     public void registerActivity(final Activity activity, final int[] pseudoTerminal) {
@@ -90,7 +109,8 @@ public class TerminalClientAPI extends LibService_Client {
         });
     }
 
-    private void registerActivity_(Activity activity, int[] pseudoTerminal) {
+    private void storeBundle(Activity activity, int[] pseudoTerminal) {
+        bundle = new Bundle();
         TrackedActivity trackedActivity = new TrackedActivity();
         if (!trackedActivity.storePseudoTerminal(pseudoTerminal)) {
             logUtils.errorAndThrow("failed to store Pseudo-Terminal");
@@ -114,8 +134,12 @@ public class TerminalClientAPI extends LibService_Client {
         } catch (PackageManager.NameNotFoundException e) {
             e.printStackTrace();
         }
-        Bundle bundle = new Bundle();
         bundle.putParcelable("ACTIVITY", trackedActivity);
+    }
+
+    private void registerActivity_(Activity activity, int[] pseudoTerminal) {
+        // a bundle cannot be cached if it contains a file descriptor, so always create new a bundle
+        storeBundle(activity, pseudoTerminal);
         messenger.sendMessageToServer(MSG_REGISTER_ACTIVITY, bundle);
     }
 

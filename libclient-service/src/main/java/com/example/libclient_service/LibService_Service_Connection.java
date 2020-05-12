@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.Service;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
 import android.content.ServiceConnection;
 import android.os.IBinder;
 
@@ -66,8 +67,11 @@ public abstract class LibService_Service_Connection implements ServiceConnection
      */
     @Override
     public void onServiceDisconnected(ComponentName name) {
-
+        log.logMethodName_Info();
+        onServiceDisconnectedCallback(name);
     }
+
+    public abstract void onServiceDisconnectedCallback(ComponentName name);
 
     /**
      * Called when the binding to this connection is dead.  This means the
@@ -81,7 +85,7 @@ public abstract class LibService_Service_Connection implements ServiceConnection
      */
     @Override
     public void onBindingDied(ComponentName name) {
-
+        log.logMethodName_Info();
     }
 
     /**
@@ -100,6 +104,6 @@ public abstract class LibService_Service_Connection implements ServiceConnection
      */
     @Override
     public void onNullBinding(ComponentName name) {
-
+        log.logMethodName_Info();
     }
 }

@@ -47,6 +47,7 @@ public abstract class LibService_Service_Component extends Service {
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
+        log.logMethodName_Info();
         if (intent.hasExtra("BINDING_TYPE")) {
             if (intent.getStringExtra("BINDING_TYPE").contentEquals("BINDING_LOCAL")) {
                 onMessengerBindLocal();

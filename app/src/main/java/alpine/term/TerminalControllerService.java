@@ -266,7 +266,7 @@ public class TerminalControllerService extends LibService_Service_Connection {
     Context context = null;
 
     @Override
-    public void onServiceDisconnected(ComponentName name) {
+    public void onServiceDisconnectedCallback(ComponentName name) {
         // Respect being stopped from the TerminalService notification action.
         terminalController.activity.finish();
     }

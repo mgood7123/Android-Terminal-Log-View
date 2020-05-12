@@ -1,5 +1,6 @@
 package com.example.libclient_service;
 
+import android.content.ComponentName;
 import android.content.Intent;
 import android.app.Activity;
 import android.os.IBinder;
@@ -20,11 +21,13 @@ public abstract class LibService_Client {
     public abstract void onMessengerAddResponses();
 
     public abstract void onServiceConnectedCallback(IBinder boundService);
+    public abstract void onServiceDisconnectedCallback(ComponentName name);
 
     final LibService_Service_Connection connection = new LibService_Service_Connection() {
+        LibService_Client client = LibService_Client.this;
+
         @Override
         public void onServiceConnectedCallback(IBinder boundService) {
-            LibService_Client client = LibService_Client.this;
             client.messenger
                 .addResponse(LibService_Messenger.PONG)
                 .addResponse(MSG_REGISTERED_CLIENT, (message) -> {
@@ -39,10 +42,16 @@ public abstract class LibService_Client {
                 })
                 .bind(boundService)
                 .start();
+            client.onMessengerAddResponses();
             client.log.log_Info("registering");
             client.messenger.sendMessageToServer(MSG_REGISTER_CLIENT);
             client.log.log_Info("registered");
             client.onServiceConnectedCallback(boundService);
+        }
+
+        @Override
+        public void onServiceDisconnectedCallback(ComponentName name) {
+            client.onServiceDisconnectedCallback(name);
         }
     };
 
