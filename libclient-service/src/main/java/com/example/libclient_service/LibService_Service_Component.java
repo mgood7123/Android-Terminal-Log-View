@@ -11,6 +11,12 @@ import androidx.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static com.example.libclient_service.LibService_MessageCodes.MSG_REGISTER_CLIENT;
+import static com.example.libclient_service.LibService_MessageCodes.MSG_REGISTERED_CLIENT;
+import static com.example.libclient_service.LibService_MessageCodes.MSG_REGISTRATION_CONFIRMED;
+import static com.example.libclient_service.LibService_MessageCodes.MSG_UNREGISTERED_CLIENT;
+import static com.example.libclient_service.LibService_MessageCodes.MSG_UNREGISTER_CLIENT;
+
 public abstract class LibService_Service_Component extends Service {
 
     Runnable onCreateCallback = null;
@@ -33,23 +39,53 @@ public abstract class LibService_Service_Component extends Service {
         public final LibService_Service_Component service = LibService_Service_Component.this;
     }
 
+    public abstract void onMessengerAddResponses();
+
     public abstract void onMessengerBindLocal();
     public abstract void onMessengerBindRemote();
 
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
-
-        // can probs be fixed by connection/binding re-ordering
-
         if (intent.hasExtra("BINDING_TYPE")) {
             if (intent.getStringExtra("BINDING_TYPE").contentEquals("BINDING_LOCAL")) {
-                log.log_Info("onBind: binded to local service");
                 onMessengerBindLocal();
                 return new Local();
             }
         }
-        log.log_Info("onBind: binded to remote service");
+        messenger
+            .addResponse(LibService_Messenger.PING, message -> {
+                log.log_Info("sending pong");
+                messenger.sendMessageToServer(message, LibService_Messenger.PONG);
+                log.log_Info("sent pong");
+            })
+            .addResponse(MSG_REGISTER_CLIENT, (message) -> {
+                // TODO: move this into libService
+                // wait for the activity service to start and bind with its activity
+                if (!onServiceConnectedCallbackCalled.get()) {
+                    log.log_Error("waiting for onServiceConnectedCallbackCalled");
+                    InfiniteLoop infiniteLoop = new InfiniteLoop();
+                    infiniteLoop.setSleepTimeInMicroseconds(500);
+                    infiniteLoop.loop(() -> !onServiceConnectedCallbackCalled.get());
+                    log.log_Error("onServiceConnectedCallbackCalled has been set");
+                }
+                mClients.add(message.replyTo);
+                log.log_Info("SERVER: registered client");
+                log.log_Info("SERVER: informing client of registration");
+                messenger.sendMessageToServer(message, MSG_REGISTERED_CLIENT);
+            })
+            .addResponse(MSG_REGISTRATION_CONFIRMED, (message) -> {
+                // TODO: move this into libService
+                log.log_Info("SERVER: informed client of registration");
+            })
+            .addResponse(MSG_UNREGISTER_CLIENT, (message) -> {
+                // TODO: move this into libService
+                log.log_Info("SERVER: unregistering client");
+                messenger.sendMessageToServer(message, MSG_UNREGISTERED_CLIENT);
+                mClients.remove(message.replyTo);
+                log.log_Info("SERVER: unregistered client");
+            });
+        onMessengerAddResponses();
         onMessengerBindRemote();
         messenger.start();
         return messenger.getBinder();

@@ -17,8 +17,6 @@ import android.os.Messenger;
 import android.os.RemoteException;
 
 import com.example.libclient_service.LibService_Client;
-import com.example.libclient_service.LibService_Messenger;
-import com.example.libclient_service.RunnableArgument;
 
 import java.util.ArrayList;
 
@@ -32,23 +30,6 @@ public class TerminalClientAPI extends LibService_Client {
     public static native int getPid();
     public static native int[] createPseudoTerminal();
 
-    /**
-     * Command to the service to register a client, receiving callbacks
-     * from the service.  The Message's replyTo field must be a Messenger of
-     * the client where callbacks should be sent.
-     */
-    static final int MSG_REGISTER_CLIENT = 1;
-    static final int MSG_REGISTERED_CLIENT = 2;
-
-    /**
-     * Command to the service to unregister a client, ot stop receiving callbacks
-     * from the service.  The Message's replyTo field must be a Messenger of
-     * the client as previously given with MSG_REGISTER_CLIENT.
-     */
-
-    static final int MSG_UNREGISTER_CLIENT = 3;
-    static final int MSG_UNREGISTERED_CLIENT = 4;
-
     public static final int MSG_REGISTER_ACTIVITY = 5;
     static final int MSG_REGISTERED_ACTIVITY = 6;
     static final int MSG_REGISTER_ACTIVITY_FAILED = 7;
@@ -56,8 +37,6 @@ public class TerminalClientAPI extends LibService_Client {
     static final int MSG_STARTED_TERMINAL_ACTIVITY = 9;
 
     static final int MSG_CALLBACK_INVOKED = 100;
-    static final int MSG_IS_SERVER_ALIVE = 1300;
-    static final int MSG_NO_REPLY = 999;
 
     /** Messenger for communicating with the service. */
     Messenger mService = null;
@@ -67,26 +46,9 @@ public class TerminalClientAPI extends LibService_Client {
 
     private ArrayList<Runnable> runnableArrayList = new ArrayList<>();
 
-    public int MSG_REGISTRATION_CONFIRMED = 12345;
-
     @Override
-    public void onServiceConnectedCallback(IBinder boundService) {
-        log.logParentMethodName_Info();
-        log.logMethodName_Info();
+    public void onMessengerAddResponses() {
         messenger
-            .addResponse(LibService_Messenger.PONG)
-            .addResponse(MSG_NO_REPLY)
-            .addResponse(MSG_REGISTERED_CLIENT, (message) -> {
-                messenger.log.log_Info("registered");
-                messenger.sendMessageToServer(message, MSG_REGISTRATION_CONFIRMED);
-                messenger.log.log_Info("sent message to server");
-            })
-            .addResponse(MSG_UNREGISTERED_CLIENT, (message) -> {
-                messenger.log.log_Info("unregistered");
-            })
-            .addResponse(MSG_UNREGISTERED_CLIENT, (message) -> {
-                messenger.log.log_Info("SERVER IS ALIVE");
-            })
             .addResponse(MSG_REGISTER_ACTIVITY_FAILED, (message) -> {
                 messenger.log.log_Info("failed to register activity");
             })
@@ -95,15 +57,13 @@ public class TerminalClientAPI extends LibService_Client {
             })
             .addResponse(MSG_STARTED_TERMINAL_ACTIVITY, (messsage) -> {
                 messenger.log.log_Info("started terminal activity");
-            })
-            .bind(boundService)
-            .start();
+            });
+    }
 
-        // We want to monitor the service for as long as we are
-        // connected to it.
-        logUtils.log_Info("registering");
-        messenger.sendMessageToServer(MSG_REGISTER_CLIENT);
-
+    @Override
+    public void onServiceConnectedCallback(IBinder boundService) {
+        log.logParentMethodName_Info();
+        log.logMethodName_Info();
         for (Runnable action : runnableArrayList) {
             action.run();
         }

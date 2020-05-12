@@ -76,23 +76,6 @@ public class TerminalService extends LibService_Service_Component implements Ses
     private static final int NOTIFICATION_ID = 1338;
     private static final String NOTIFICATION_CHANNEL_ID = "alpine.term.NOTIFICATION_CHANNEL";
 
-    /**
-     * Command to the service to register a client, receiving callbacks
-     * from the service.  The Message's replyTo field must be a Messenger of
-     * the client where callbacks should be sent.
-     */
-    static final int MSG_REGISTER_CLIENT = 1;
-    static final int MSG_REGISTERED_CLIENT = 2;
-
-    /**
-     * Command to the service to unregister a client, ot stop receiving callbacks
-     * from the service.  The Message's replyTo field must be a Messenger of
-     * the client as previously given with MSG_REGISTER_CLIENT.
-     */
-
-    static final int MSG_UNREGISTER_CLIENT = 3;
-    static final int MSG_UNREGISTERED_CLIENT = 4;
-
     public static final int MSG_REGISTER_ACTIVITY = 5;
     static final int MSG_REGISTERED_ACTIVITY = 6;
     static final int MSG_REGISTER_ACTIVITY_FAILED = 7;
@@ -100,8 +83,6 @@ public class TerminalService extends LibService_Service_Component implements Ses
     static final int MSG_STARTED_TERMINAL_ACTIVITY = 9;
 
     static final int MSG_CALLBACK_INVOKED = 100;
-    static final int MSG_IS_SERVER_ALIVE = 1300;
-    static final int MSG_NO_REPLY = 999;
 
     /**
      * The terminal sessions which this service manages.
@@ -160,18 +141,6 @@ public class TerminalService extends LibService_Service_Component implements Ses
         }
     }
 
-    public void waitForClientToReply() {
-        logUtils.log_Info("CLIENT: waiting for reply");
-        synchronized (waitOnMe) {
-            try {
-                waitOnMe.wait();
-            } catch (InterruptedException e) {
-                // we should have gotten our answer now.
-            }
-        }
-        logUtils.log_Info("CLIENT: replied");
-    }
-
     public static int toInt(boolean value) {
         return value ? 0 : 1;
     }
@@ -197,39 +166,8 @@ public class TerminalService extends LibService_Service_Component implements Ses
     TerminalControllerService terminalControllerService = null;
 
     @Override
-    public void onMessengerBindLocal() {
-        // do nothing
-    }
-
-    public int MSG_REGISTRATION_CONFIRMED = 12345;
-
-    @Override
-    public void onMessengerBindRemote() {
+    public void onMessengerAddResponses() {
         messenger
-            .addResponse(LibService_Messenger.PING, message -> {
-                log.log_Info("sending pong");
-                messenger.sendMessageToServer(message, LibService_Messenger.PONG);
-                log.log_Info("sent pong");
-            })
-            .addResponse(MSG_REGISTER_CLIENT, (message) -> {
-                mClients.add(message.replyTo);
-                logUtils.log_Info("SERVER: registered client");
-                logUtils.log_Info("SERVER: informing client of registration");
-                messenger.sendMessageToServer(message, MSG_REGISTERED_CLIENT);
-            })
-            .addResponse(MSG_REGISTRATION_CONFIRMED, (message) -> {
-                logUtils.log_Info("SERVER: informed client of registration");
-            })
-            .addResponse(MSG_UNREGISTER_CLIENT, (message) -> {
-                logUtils.log_Info("SERVER: unregistering client");
-                messenger.sendMessageToServer(message, MSG_UNREGISTERED_CLIENT);
-                mClients.remove(message.replyTo);
-                logUtils.log_Info("SERVER: unregistered client");
-            })
-            .addResponse(MSG_IS_SERVER_ALIVE, (message) -> {
-                logUtils.log_Info("SERVER IS ALIVE");
-                messenger.sendMessageToServer(message, MSG_IS_SERVER_ALIVE);
-            })
             .addResponse(MSG_REGISTER_ACTIVITY, (message) -> {
                 log.assertTrue(messenger.handlerThread.getState() != Thread.State.NEW);
                 Bundle bundle = message.getData();
@@ -241,7 +179,6 @@ public class TerminalService extends LibService_Service_Component implements Ses
                 } else {
                     logUtils.log_Info("SERVER: PID OF TRACKED ACTIVITY: " + trackedActivity.pid);
                     terminalService.mTrackedActivities.add(trackedActivity);
-                    waitForManagerToStart();
                     logUtils.errorAndThrowIfNull(
                         terminalControllerService,
                         "SERVER: terminalControllerService is null"
@@ -259,19 +196,19 @@ public class TerminalService extends LibService_Service_Component implements Ses
                 startActivity(activity);
                 messenger.sendMessageToServer(message, MSG_STARTED_TERMINAL_ACTIVITY);
             })
-        .addResponse(MSG_CALLBACK_INVOKED, (message) -> {
-            logUtils.log_Info("INVOKED CALLBACK");
-        });
+            .addResponse(MSG_CALLBACK_INVOKED, (message) -> {
+                logUtils.log_Info("INVOKED CALLBACK");
+            });
     }
 
-    private void waitForManagerToStart() {
-        if (!onServiceConnectedCallbackCalled.get()) {
-            logUtils.log_Error("waiting for onServiceConnectedCallbackCalled");
-            InfiniteLoop infiniteLoop = new InfiniteLoop();
-            infiniteLoop.setSleepTimeInMicroseconds(500);
-            infiniteLoop.loop(() -> !onServiceConnectedCallbackCalled.get());
-            logUtils.log_Error("onServiceConnectedCallbackCalled has been set");
-        }
+    @Override
+    public void onMessengerBindLocal() {
+        // do nothing
+    }
+
+    @Override
+    public void onMessengerBindRemote() {
+        // do nothing
     }
 
     @SuppressLint({"Wakelock", "WakelockTimeout"})

@@ -207,6 +207,7 @@ public class LibService_Messenger {
 
     public boolean sendMessageToServer(Message message, Handler handler, int what, int arg1, int arg2, Object obj, Bundle bundle) {
         try {
+            log.errorAndThrowIfNull(messengerToHandleMessages);
             Message msg = Message.obtain(handler, what, arg1, arg2, obj);
             if (bundle != null) msg.setData(bundle);
             msg.replyTo = messengerToHandleMessages;

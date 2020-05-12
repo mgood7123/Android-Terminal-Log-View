@@ -4,6 +4,11 @@ import android.content.Intent;
 import android.app.Activity;
 import android.os.IBinder;
 
+import static com.example.libclient_service.LibService_MessageCodes.MSG_REGISTER_CLIENT;
+import static com.example.libclient_service.LibService_MessageCodes.MSG_REGISTERED_CLIENT;
+import static com.example.libclient_service.LibService_MessageCodes.MSG_REGISTRATION_CONFIRMED;
+import static com.example.libclient_service.LibService_MessageCodes.MSG_UNREGISTERED_CLIENT;
+
 /** this class defines a set of API's used for creating a Client that can connect to a Service */
 
 public abstract class LibService_Client {
@@ -12,16 +17,32 @@ public abstract class LibService_Client {
 
     public final LibService_Messenger messenger = new LibService_Messenger("Client");
 
-    public final void onServiceConnectedCallback() {
-        onServiceConnectedCallback(null);
-    };
+    public abstract void onMessengerAddResponses();
+
     public abstract void onServiceConnectedCallback(IBinder boundService);
 
-    LibService_Service_Connection connection = new LibService_Service_Connection() {
+    final LibService_Service_Connection connection = new LibService_Service_Connection() {
         @Override
         public void onServiceConnectedCallback(IBinder boundService) {
-            messenger.bind(boundService).start();
-            LibService_Client.this.onServiceConnectedCallback(boundService);
+            LibService_Client client = LibService_Client.this;
+            client.messenger
+                .addResponse(LibService_Messenger.PONG)
+                .addResponse(MSG_REGISTERED_CLIENT, (message) -> {
+                    // TODO: move this into libService
+                    client.messenger.log.log_Info("registered");
+                    client.messenger.sendMessageToServer(message, MSG_REGISTRATION_CONFIRMED);
+                    client.messenger.log.log_Info("sent message to server");
+                })
+                .addResponse(MSG_UNREGISTERED_CLIENT, (message) -> {
+                    // TODO: move this into libService
+                    client.messenger.log.log_Info("unregistered");
+                })
+                .bind(boundService)
+                .start();
+            client.log.log_Info("registering");
+            client.messenger.sendMessageToServer(MSG_REGISTER_CLIENT);
+            client.log.log_Info("registered");
+            client.onServiceConnectedCallback(boundService);
         }
     };
 
