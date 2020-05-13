@@ -403,6 +403,7 @@ Java_alpine_term_emulator_JNI_createPseudoTerminal(
 
 #include "regex_str.h"
 #include "env.h"
+//#include "pidof.h"
 
 JNIEXPORT jboolean JNICALL
 Java_alpine_term_emulator_JNI_hasDied(
@@ -410,6 +411,15 @@ Java_alpine_term_emulator_JNI_hasDied(
     jclass ALPINE_TERM_UNUSED(clazz),
     jstring package_name
 ) {
+
+//    int pid_Count = NULL;
+//
+//    char const *package_name_utf8 = (*env)->GetStringUTFChars(env, package_name, NULL);
+//    pidof(package_name_utf8, &pid_Count);
+//    (*env)->ReleaseStringUTFChars(env, package_name, package_name_utf8);
+//
+//    return pid_Count == 0;
+
     env_t argv = env__new();
     argv = env__add(argv, "/sbin/su");
     argv = env__add(argv, "-c");
